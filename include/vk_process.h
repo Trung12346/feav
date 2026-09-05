@@ -27,6 +27,14 @@ typedef struct
     VkPhysicalDevice physical_device;
     VkDevice logical_device;
     VkQueue graphics_queue;
+    VkSurfaceKHR surface;
+    VkSwapchainKHR swapchain;
+    VkExtent2D extent_2d;
+    VkSurfaceFormatKHR surface_format;
+    uint32_t image_count;
+    VkImage *images;
+    uint32_t image_view_count;
+    VkImageView *image_views;
 } VkProcess;
 
 VkProcess vk_process_no_args_construct(void)
@@ -36,7 +44,7 @@ VkProcess vk_process_no_args_construct(void)
 static bool enumerate_extension_properties_check(void *properties, uint32_t extension_count, const char *requirement)
 {
     VkExtensionProperties *extensions = properties;
-    for (uint32_t x = 0; x < extension_count; x++)
+    for (uint32_t x = 0U; x < extension_count; x++)
     {
         if (strcmp(requirement, extensions[x].extensionName) == 0)
         {
@@ -58,7 +66,7 @@ static bool enumerate_callback
         if (!func(properties, prop_count, requirements[i])) return false;
     }
 }
-extern int instance_create(VkProcess *process)
+extern void instance_create(VkProcess *process)
 {   
     VkInstance *vk_instance = &process->instance;
 
@@ -88,12 +96,12 @@ extern int instance_create(VkProcess *process)
     printf(INF VK_DBG_PREFIX" found %u layer(s)\n", vk_layer_count);
     VkLayerProperties *vk_layers = malloc(sizeof(VkLayerProperties) * vk_layer_count);
     vkEnumerateInstanceLayerProperties(&vk_layer_count, vk_layers);
-    for (uint32_t i = 0; i < vk_layer_count; i++)
+    for (uint32_t i = 0U; i < vk_layer_count; i++)
     {
         printf(INF VK_DBG_PREFIX" found %s ver_%u\n", vk_layers[i].layerName, vk_layers[i].specVersion);
     }
 
-    for (uint32_t i = 0; i < VALIDATION_LAYER_COUNT; i++)
+    for (uint32_t i = 0U; i < VALIDATION_LAYER_COUNT; i++)
     {
         bool match = false;
         for (uint32_t x = 0; x < vk_layer_count; x++)
@@ -106,8 +114,8 @@ extern int instance_create(VkProcess *process)
         }
         if (!match)
         {
-            printf(ERR VK_DBG_PREFIX" Could not find required %s layer from Vulkan\n", required_layers[i]);
-            return 1;
+            printf(ERR VK_DBG_PREFIX" Could not find required %s layer from Vulkan, unable to proceed\n", required_layers[i]);
+            exit(1);
         }
     }
 
@@ -127,7 +135,7 @@ extern int instance_create(VkProcess *process)
     memcpy(&required_extensions[glfw_extension_count], additional_extensions, sizeof(additional_extensions));
 
     printf(INF GLFW_DBG_PREFIX" requires: %u extension(s)\n", required_extension_count);
-    for (uint32_t i = 0; i < required_extension_count; i++)
+    for (uint32_t i = 0U; i < required_extension_count; i++)
     {
         printf(INF GLFW_DBG_PREFIX" requires %s\n", required_extensions[i]);
     }
@@ -137,18 +145,18 @@ extern int instance_create(VkProcess *process)
     printf(INF VK_DBG_PREFIX" found:  %u extension(s)\n", vk_extension_count);
     VkExtensionProperties *vk_extensions = malloc(sizeof(VkExtensionProperties) * vk_extension_count);
     vkEnumerateInstanceExtensionProperties(NULL, &vk_extension_count, vk_extensions);
-    for (uint32_t i = 0; i < vk_extension_count; i++)
+    for (uint32_t i = 0U; i < vk_extension_count; i++)
     {
         printf(INF VK_DBG_PREFIX" found %s ver_%u\n", vk_extensions[i].extensionName, vk_extensions[i].specVersion);
     }
 
-    for (uint32_t i = 0; i < required_extension_count; i++)
+    for (uint32_t i = 0U; i < required_extension_count; i++)
     {
         
         if (!enumerate_extension_properties_check(vk_extensions, vk_extension_count, required_extensions[i]))
         {
-            printf(ERR GLFW_DBG_PREFIX" Could not find required %s extension from Vulkan\n", required_extensions[i]);
-            return 1;
+            printf(ERR GLFW_DBG_PREFIX" Could not find required %s extension from Vulkan, unable to proceed\n", required_extensions[i]);
+            exit(1);
         }
     }
 
@@ -164,13 +172,14 @@ extern int instance_create(VkProcess *process)
 
     if (vkCreateInstance(&info_create, NULL, vk_instance) != VK_SUCCESS)
     {
-        printf(ERR VK_DBG_PREFIX" Vulkan instance created unsuccessfully\n");
+        printf(ERR VK_DBG_PREFIX" Vulkan instance created unsuccessfully, unable to proceed\n");
+        exit(1);
     }
     
+    printf(INF VK_DBG_PREFIX" Vulkan instane created successfully\n");
+
     free(vk_extensions);
     free(vk_layers);
-
-    return 0;
 }
 static VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback
 (
@@ -250,7 +259,7 @@ extern void physical_device_pick(VkProcess *process, int device_select)
     uint32_t physical_device_count;
     vkEnumeratePhysicalDevices(process->instance, &physical_device_count, NULL);
 
-    if (physical_device_count == 0)
+    if (physical_device_count == 0U)
     {
         printf(ERR VK_DBG_PREFIX" Device does not support Vulkan, unable to proceed\n");
         exit(1);
@@ -273,7 +282,7 @@ extern void physical_device_pick(VkProcess *process, int device_select)
         uint32_t (*candidates)[2] = calloc(physical_device_count, sizeof(*candidates));
         uint32_t candidate_index = 0;
 
-        for (uint32_t i = 0; i < physical_device_count; i++)
+        for (uint32_t i = 0U; i < physical_device_count; i++)
         {
             uint32_t device_extension_count;
             vkGetPhysicalDeviceProperties(vk_physical_devices[i], &vk_physical_device_properties);
@@ -282,11 +291,11 @@ extern void physical_device_pick(VkProcess *process, int device_select)
             VkExtensionProperties device_extensions[device_extension_count];
             vkEnumerateDeviceExtensionProperties(vk_physical_devices[i], NULL, &device_extension_count, device_extensions);
 
-            uint32_t score = 0;
+            uint32_t score = 0U;
 
             if (vk_physical_device_properties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU)
             {
-                score += 1000;
+                score += 1000U;
             }
             score += vk_physical_device_properties.limits.maxImageDimension2D;
             if
@@ -429,13 +438,13 @@ extern void physical_device_pick(VkProcess *process, int device_select)
             //printf(TAB"sparse properties: %\n", vk_physical_device_properties.);
         }
 
-        if (candidate_index == 0)
+        if (candidate_index == 0U)
         {
-            printf(ERR VK_DBG_PREFIX" Found no vulkan-compatible physical device\n");
+            printf(ERR VK_DBG_PREFIX" Found no vulkan-compatible physical device, unable to proceed\n");
             exit(1);
         }
-        uint32_t max_index = 0;
-        for (uint32_t i = 0; i < candidate_index; i++)
+        uint32_t max_index = 0U;
+        for (uint32_t i = 0U; i < candidate_index; i++)
         {
             if (candidates[i][0] > candidates[max_index][0])
             {
@@ -469,9 +478,15 @@ extern void logical_device_create(VkProcess *process)
     vkGetPhysicalDeviceQueueFamilyProperties(process->physical_device, &queue_family_count, vk_queue_families);
 
     uint32_t graphics_index = queue_family_count;
-    for (uint32_t i = 0; i < vk_queue_families; i++)
+    for (uint32_t i = 0U; i < queue_family_count; i++)
     {
-        if (vk_queue_families[i].queueFlags & VK_QUEUE_GRAPHICS_BIT)
+        VkBool32 is_supported = VK_FALSE;
+        vkGetPhysicalDeviceSurfaceSupportKHR(process->physical_device, i, process->surface, &is_supported);
+        if
+        (
+            (vk_queue_families[i].queueFlags & (VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_COMPUTE_BIT | VK_QUEUE_TRANSFER_BIT)) &&
+            is_supported
+        )
         {
             graphics_index = i;
             break;
@@ -479,15 +494,15 @@ extern void logical_device_create(VkProcess *process)
     }
     if (graphics_index == queue_family_count)
     {
-        printf(ERR VK_DBG_PREFIX" Physical device not compatible with requested resources\n");
+        printf(ERR VK_DBG_PREFIX" Physical device not compatible with requested resources, unable to proceed\n");
         exit(1);
     }
 
-    float queue_prioriy = 0.5f;
+    float queue_prioriy = 1.0f;
     VkDeviceQueueCreateInfo device_queue_create_info = (VkDeviceQueueCreateInfo)
     {
         .queueFamilyIndex = graphics_index,
-        .queueCount = queue_family_count,
+        .queueCount = 1U,
         .pQueuePriorities = &queue_prioriy,
         .sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO
     };
@@ -516,7 +531,7 @@ extern void logical_device_create(VkProcess *process)
         .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2
     };
 
-    char *required_device_extensions[] =
+    const char *required_device_extensions[] =
     {
         VK_KHR_SWAPCHAIN_EXTENSION_NAME
     };
@@ -525,7 +540,7 @@ extern void logical_device_create(VkProcess *process)
     VkDeviceCreateInfo device_create_info = (VkDeviceCreateInfo)
     {
         .pNext = &vk_physical_device_feature2,
-        .queueCreateInfoCount = 1,
+        .queueCreateInfoCount = 1U,
         .pQueueCreateInfos = &device_queue_create_info,
         .enabledExtensionCount = required_device_extension_count,
         .ppEnabledExtensionNames = required_device_extensions,
@@ -533,9 +548,159 @@ extern void logical_device_create(VkProcess *process)
     };
 
     vkCreateDevice(process->physical_device, &device_create_info, NULL, &process->logical_device);
-    vkGetDeviceQueue(process->logical_device, graphics_index, 1, &process->graphics_queue);
+    vkGetDeviceQueue(process->logical_device, graphics_index, 0U, &process->graphics_queue);
+
+    printf(INF VK_DBG_PREFIX" Device created successfully\n");
 
     free(vk_queue_families);
+}
+
+static VkExtent2D swap_extent_choose(VkSurfaceCapabilitiesKHR *surface_cap, GLFWwindow *window)
+{
+    if (surface_cap->currentExtent.width != UINT32_MAX)
+    {
+        return surface_cap->currentExtent;
+    }
+
+    uint32_t width, height = 0U;
+    glfwGetFramebufferSize(window, &width, &height);
+
+    VkExtent2D max_extent = surface_cap->maxImageExtent;
+    VkExtent2D min_extent = surface_cap->minImageExtent;
+    if (width > max_extent.width) width = max_extent.width;
+    else if (width < min_extent.width) width = min_extent.width;
+    if (height > max_extent.height) height = max_extent.height;
+    else if (height < min_extent.height) height = min_extent.height;
+
+    return (VkExtent2D) {width, height};
+}
+static uint32_t swap_min_image_count(VkSurfaceCapabilitiesKHR *surface_cap)
+{
+    uint32_t min_image_count = surface_cap->minImageCount > 3U ? surface_cap->minImageCount : 3U;
+
+    if
+    (
+        (surface_cap->maxImageCount > 0U) &&
+        (surface_cap->maxImageCount < surface_cap->minImageCount)
+    ) return surface_cap->maxImageCount;
+}
+static VkSurfaceFormatKHR swap_surface_format_choose(VkSurfaceFormatKHR *formats, uint32_t format_count)
+{
+    if (format_count < 1)
+    {
+        printf(ERR VK_DBG_PREFIX" No available surface format for this physical device, unable to proceed\n");
+        exit(1);
+    }
+    for (uint32_t i = 0; i < format_count; i++)
+    {
+        if
+        (
+            formats[i].format == VK_FORMAT_B8G8R8A8_SRGB &&
+            formats[i].colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR
+        ) printf(INF VK_DBG_PREFIX" Found compatible swapchain surface format\n"); return formats[i];
+    }
+    printf(ERR VK_DBG_PREFIX" No suitable surface format for this application, unable to proceed\n");
+    exit(1);
+}
+static VkPresentModeKHR swap_surface_present_mode_choose(VkPresentModeKHR *present_modes, uint32_t present_mode_count)
+{
+    bool mailbox = false;
+    bool fifo = false;
+
+    for (uint32_t i = 0; i < present_mode_count; i++)
+    {
+        switch (present_modes[i])
+        {
+            case VK_PRESENT_MODE_FIFO_KHR: fifo = true; break;
+            case VK_PRESENT_MODE_MAILBOX_KHR: mailbox = true; break;
+        }
+    }
+    if (!fifo)
+    {
+        printf(ERR VK_DBG_PREFIX" No appropriate present mode found, unable to proceed\n");
+        exit(1);
+    }
+
+    if (mailbox) printf(INF VK_DBG_PREFIX" Present mode: mailbox\n");
+
+    return mailbox ? VK_PRESENT_MODE_MAILBOX_KHR : VK_PRESENT_MODE_FIFO_KHR;
+}
+extern void swapchain_create(VkProcess *process, GLFWwindow *window)
+{
+    VkSurfaceCapabilitiesKHR surface_capabilities;
+    vkGetPhysicalDeviceSurfaceCapabilitiesKHR(process->physical_device, process->surface, &surface_capabilities);
+
+    process->extent_2d = swap_extent_choose(&surface_capabilities, window);
+    uint32_t min_image_count = swap_min_image_count(&surface_capabilities);
+
+    uint32_t surface_format_count;
+    vkGetPhysicalDeviceSurfaceFormatsKHR(process->physical_device, process->surface, &surface_format_count, NULL);
+    VkSurfaceFormatKHR *surface_formats = malloc(sizeof(VkSurfaceFormatKHR) * surface_format_count);
+    vkGetPhysicalDeviceSurfaceFormatsKHR(process->physical_device, process->surface, &surface_format_count, surface_formats);
+    process->surface_format = swap_surface_format_choose(surface_formats, surface_format_count);
+
+    uint32_t present_mode_count;
+    vkGetPhysicalDeviceSurfacePresentModesKHR(process->physical_device, process->surface, &present_mode_count, NULL);
+    VkPresentModeKHR *present_modes = malloc(sizeof(VkPresentModeKHR) * present_mode_count);
+    vkGetPhysicalDeviceSurfacePresentModesKHR(process->physical_device, process->surface, &present_mode_count, present_modes);
+    VkPresentModeKHR present_mode = swap_surface_present_mode_choose(present_modes, present_mode_count);
+
+    VkSwapchainCreateInfoKHR swapchain_create_info = (VkSwapchainCreateInfoKHR)
+    {
+        .surface = process->surface,
+        .minImageCount = min_image_count,
+        .imageFormat = process->surface_format.format,
+        .imageColorSpace = process->surface_format.colorSpace,
+        .imageExtent = process->extent_2d,
+        .imageArrayLayers = 1,
+        .imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+        .imageSharingMode = VK_SHARING_MODE_EXCLUSIVE,
+        .preTransform = surface_capabilities.currentTransform,
+        .compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR,
+        .presentMode = present_mode,
+        .clipped = true,
+        .sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR
+    };
+
+    vkCreateSwapchainKHR(process->logical_device, &swapchain_create_info, NULL, &process->swapchain);
+    uint32_t swapchain_image_count;
+    vkGetSwapchainImagesKHR(process->logical_device, process->swapchain, &swapchain_image_count, NULL);
+    process->image_count = swapchain_image_count;
+    process->images = malloc(sizeof(VkImage) * swapchain_image_count);
+    vkGetSwapchainImagesKHR(process->logical_device, process->swapchain, &swapchain_image_count, process->images);
+
+    printf(INF VK_DBG_PREFIX" Swapchain created successfully\n");
+
+    free(surface_formats);
+    free(present_modes);
+}
+
+extern void image_views_create(VkProcess *process)
+{
+    VkImageViewCreateInfo image_view_create_info = (VkImageViewCreateInfo)
+    {
+        .viewType = VK_IMAGE_TYPE_2D,
+        .format = process->surface_format.format,
+        .subresourceRange = (VkImageSubresourceRange)
+        {
+            .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+            .baseMipLevel = 0U,
+            .levelCount = 1U,
+            .baseArrayLayer = 0U,
+            .layerCount = 1U
+        },
+        .components = (VkComponentMapping){},
+        .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO
+    };
+
+    process->image_view_count = process->image_count;
+    process->image_views = malloc(sizeof(VkImageView) * process->image_view_count);
+    for (uint32_t i = 0; i < process->image_view_count; i++)
+    {
+        image_view_create_info.image = process->images[i];
+        vkCreateImageView(process->logical_device, &image_view_create_info, NULL, &process->image_views[i]);
+    }
+    printf(INF VK_DBG_PREFIX" Loaded %u image view(s)\n", process->image_view_count);
 }
 
 #endif

@@ -31,8 +31,11 @@ static void vulkan_init(App *app)
 {
     instance_create(&app->vk_process);
     messenger_debug_setup(&app->vk_process);
+    glfwCreateWindowSurface(app->vk_process.instance, app->window, NULL, &app->vk_process.surface);
     physical_device_pick(&app->vk_process, app->gpu_select_flag);
     logical_device_create(&app->vk_process);
+    swapchain_create(&app->vk_process, app->window);
+    image_views_create(&app->vk_process);
 }
 static void main_loop(GLFWwindow *window)
 {
@@ -41,9 +44,15 @@ static void main_loop(GLFWwindow *window)
         glfwPollEvents();
     }
 }
-static void clean_up(GLFWwindow *window)
+static void vulkan_destroy(VkProcess *process)
 {
-    glfwDestroyWindow(window);
+    free(process->images);
+    free(process->image_views);
+}
+static void clean_up(App *app)
+{
+    vulkan_destroy(&app->vk_process);
+    glfwDestroyWindow(app->window);
     glfwTerminate();
 }
 
@@ -52,7 +61,7 @@ extern void run(App *app)
     window_init(&app->window);
     vulkan_init(app);
     main_loop(app->window);
-    clean_up(app->window);
+    clean_up(app);
 }
 
 #endif

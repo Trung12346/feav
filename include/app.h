@@ -36,6 +36,7 @@ static void vulkan_init(App *app)
     logical_device_create(&app->vk_process);
     swapchain_create(&app->vk_process, app->window);
     image_views_create(&app->vk_process);
+    graphics_pipeline_create(&app->vk_process);
 }
 static void main_loop(GLFWwindow *window)
 {
@@ -48,6 +49,7 @@ static void vulkan_destroy(VkProcess *process)
 {
     free(process->images);
     free(process->image_views);
+    vkDestroyInstance(&process->instance, NULL);
 }
 static void clean_up(App *app)
 {

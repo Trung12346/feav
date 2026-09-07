@@ -703,4 +703,19 @@ extern void image_views_create(VkProcess *process)
     printf(INF VK_DBG_PREFIX" Loaded %u image view(s)\n", process->image_view_count);
 }
 
+extern void graphics_pipeline_create(VkProcess *process)
+{
+    char *shader_bin = shader_bin_read("slang.spv");
+
+    VkShaderModuleCreateInfo shader_create_info = (VkShaderModuleCreateInfo)
+    {
+        .codeSize = sizeof(shader_bin),
+        .pCode = (const uint32_t *)shader_bin,
+        .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO
+    };
+
+    VkShaderModule shader_module;
+    vkCreateShaderModule(process->logical_device, &shader_create_info, NULL, &shader_module);
+}
+
 #endif

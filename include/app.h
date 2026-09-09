@@ -16,7 +16,8 @@ extern App app_no_args_construct()
 {
     return (App)
     {
-        .gpu_select_flag = -1
+        .gpu_select_flag = -1,
+        .vk_process = vk_process_no_args_construct()
     };
 }
 static void window_init(GLFWwindow **window)
@@ -31,25 +32,63 @@ static void vulkan_init(App *app)
 {
     instance_create(&app->vk_process);
     messenger_debug_setup(&app->vk_process);
-    glfwCreateWindowSurface(app->vk_process.instance, app->window, NULL, &app->vk_process.surface);
+    app->vk_process.surface = malloc(sizeof(VkSurfaceKHR));
+    glfwCreateWindowSurface(*app->vk_process.instance, app->window, NULL, app->vk_process.surface);
     physical_device_pick(&app->vk_process, app->gpu_select_flag);
     logical_device_create(&app->vk_process);
     swapchain_create(&app->vk_process, app->window);
     image_views_create(&app->vk_process);
     graphics_pipeline_create(&app->vk_process);
+    command_pool_create(&app->vk_process);
+    command_buffer_create(&app->vk_process);
+    sync_object_create(&app->vk_process);
 }
-static void main_loop(GLFWwindow *window)
+static void main_loop(App *app)
 {
-    for(;!glfwWindowShouldClose(window);)
+    for(;!glfwWindowShouldClose(app->window);)
     {
         glfwPollEvents();
+        frame_draw(&app->vk_process);
     }
+    vkDeviceWaitIdle(*app->vk_process.logical_device);
 }
 static void vulkan_destroy(VkProcess *process)
 {
+    VkDevice *device = process->logical_device;
+    vkDestroyCommandPool(*device, *process->command_pool, NULL);
+    vkDestroySemaphore(*device, *process->present_complete_semaphore, NULL);
+    vkDestroySemaphore(*device, *process->render_finished_semaphore, NULL);
+    vkDestroyImage(*device, *process->images, NULL);
+    vkDestroyImageView(*device, *process->image_views, NULL);
+    vkDestroySwapchainKHR(*device, *process->swapchain, NULL);
+    vkDestroyPipelineLayout(*device, *process->pipeline_layout, NULL);
+    vkDestroyPipeline(*device, *process->graphics_pipeline, NULL);
+    vkDestroyDevice(*device, NULL);
+    vkDestroySurfaceKHR(*process->instance, *process->surface, NULL);
+    ((PFN_vkDestroyDebugUtilsMessengerEXT) vkGetInstanceProcAddr(*process->instance, "vkDestroyDebugUtilsMessengerEXT"))
+    (
+        *process->instance,
+        process->debug_message,
+        NULL
+    );
+    vkDestroyInstance(*process->instance, NULL);
+    free(process->instance);
+    free(process->physical_device);
+    free(process->logical_device);
+    free(process->graphics_queue);
+    free(process->surface);
+    free(process->swapchain);
+    free(process->extent_2d);
+    free(process->surface_format);
+    free(process->pipeline_layout);
+    free(process->graphics_pipeline);
     free(process->images);
     free(process->image_views);
-    vkDestroyInstance(&process->instance, NULL);
+    free(process->command_pool);
+    free(process->command_buffers);
+    free(process->present_complete_semaphore);
+    free(process->render_finished_semaphore);
+    
 }
 static void clean_up(App *app)
 {
@@ -62,7 +101,7 @@ extern void run(App *app)
 {
     window_init(&app->window);
     vulkan_init(app);
-    main_loop(app->window);
+    main_loop(app);
     clean_up(app);
 }
 

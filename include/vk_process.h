@@ -22,24 +22,48 @@ const bool validation_layers_enabled = true;
 
 typedef struct
 {
-    VkInstance instance;
+    VkInstance *instance;
     VkDebugUtilsMessengerEXT debug_message;
-    VkPhysicalDevice physical_device;
-    VkDevice logical_device;
-    VkQueue graphics_queue;
-    VkSurfaceKHR surface;
-    VkSwapchainKHR swapchain;
-    VkExtent2D extent_2d;
-    VkSurfaceFormatKHR surface_format;
+    VkPhysicalDevice *physical_device;
+    VkDevice *logical_device;
+    VkQueue *graphics_queue;
+    uint32_t graphics_queue_index;
+    VkSurfaceKHR *surface;
+    VkSwapchainKHR *swapchain;
+    VkExtent2D *extent_2d;
+    VkSurfaceFormatKHR *surface_format;
     uint32_t image_count;
     VkImage *images;
     uint32_t image_view_count;
     VkImageView *image_views;
+    VkPipelineLayout *pipeline_layout;
+    VkPipeline *graphics_pipeline;
+    VkCommandPool *command_pool;
+    uint32_t command_buffer_count;
+    VkCommandBuffer *command_buffers;
+    VkSemaphore *present_complete_semaphore;
+    VkSemaphore *render_finished_semaphore;
+    VkFence *fence;
+    
 } VkProcess;
 
 VkProcess vk_process_no_args_construct(void)
 {
-    return (VkProcess){};
+    return (VkProcess)
+    {
+        .instance = NULL,
+        .physical_device = NULL,
+        .logical_device = NULL,
+        .graphics_queue = NULL,
+        .surface = NULL,
+        .swapchain = NULL,
+        .extent_2d = NULL,
+        .surface_format = NULL,
+        .images = NULL,
+        .image_views = NULL,
+        .pipeline_layout = NULL,
+        .graphics_pipeline = NULL
+    };
 }
 static bool enumerate_extension_properties_check(void *properties, uint32_t extension_count, const char *requirement)
 {
@@ -51,6 +75,7 @@ static bool enumerate_extension_properties_check(void *properties, uint32_t exte
             return true;
         }
     }
+    return false;
 }
 static bool enumerate_callback
 (
@@ -65,10 +90,12 @@ static bool enumerate_callback
     {
         if (!func(properties, prop_count, requirements[i])) return false;
     }
+    return true;
 }
-extern void instance_create(VkProcess *process)
+void instance_create(VkProcess *process)
 {   
-    VkInstance *vk_instance = &process->instance;
+    //VkInstance *vk_instance = &process->instance;
+    
 
     const VkApplicationInfo app_info = (VkApplicationInfo)
     {
@@ -76,7 +103,8 @@ extern void instance_create(VkProcess *process)
         .applicationVersion = VK_MAKE_VERSION( 1, 0, 0 ),
         .pEngineName = "No Engine",
         .engineVersion = VK_MAKE_VERSION( 1, 0, 0 ),
-        .apiVersion = VK_API_VERSION_1_4
+        .apiVersion = VK_API_VERSION_1_4,
+        .sType = VK_STRUCTURE_TYPE_APPLICATION_INFO
     };
 
 
@@ -163,14 +191,15 @@ extern void instance_create(VkProcess *process)
     VkInstanceCreateInfo info_create = (VkInstanceCreateInfo)
     {
         .pApplicationInfo = &app_info,
-        .enabledLayerCount = VALIDATION_LAYER_COUNT,
-        .ppEnabledLayerNames = required_layers,
+        .enabledLayerCount = validation_layers_enabled ? VALIDATION_LAYER_COUNT : 0,
+        .ppEnabledLayerNames = validation_layers_enabled ? required_layers : NULL,
         .enabledExtensionCount = required_extension_count,
         .ppEnabledExtensionNames = required_extensions,
         .sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO
     };
 
-    if (vkCreateInstance(&info_create, NULL, vk_instance) != VK_SUCCESS)
+    process->instance = malloc(sizeof(VkInstance));
+    if (vkCreateInstance(&info_create, NULL, process->instance) != VK_SUCCESS)
     {
         printf(ERR VK_DBG_PREFIX" Vulkan instance created unsuccessfully, unable to proceed\n");
         exit(1);
@@ -191,12 +220,12 @@ static VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback
 {
 	if (severity == VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT || severity == VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT)
 	{
-		printf("validation layer: type %u msg: %s\n", pCallbackData->pMessage, type);
+		printf(INF VK_DBG_PREFIX" Validation layer: type %u msg: %s\n", type, pCallbackData->pMessage);
 	}
 
 	return VK_FALSE;
 }
-extern void messenger_debug_setup(VkProcess *process)
+void messenger_debug_setup(VkProcess *process)
 {
     if (!validation_layers_enabled)
     {
@@ -221,7 +250,7 @@ extern void messenger_debug_setup(VkProcess *process)
     };
 
     PFN_vkCreateDebugUtilsMessengerEXT wrapperCreateDebugUtilsMessengerEXT =
-    (PFN_vkCreateDebugUtilsMessengerEXT) vkGetInstanceProcAddr(process->instance, "vkCreateDebugUtilsMessengerEXT");
+    (PFN_vkCreateDebugUtilsMessengerEXT) vkGetInstanceProcAddr(*process->instance, "vkCreateDebugUtilsMessengerEXT");
 
     if (!wrapperCreateDebugUtilsMessengerEXT)
     {
@@ -231,7 +260,7 @@ extern void messenger_debug_setup(VkProcess *process)
     {
         wrapperCreateDebugUtilsMessengerEXT
         (
-            process->instance,
+            *process->instance,
             &debug_utils_messenger_create_info_ext,
             NULL,
             &process->debug_message
@@ -254,10 +283,10 @@ static char *vk_bool_resolver(VkBool32 vk_bool)
 {
     return vk_bool ? "true" : "false";
 }
-extern void physical_device_pick(VkProcess *process, int device_select)
+void physical_device_pick(VkProcess *process, int device_select)
 {
     uint32_t physical_device_count;
-    vkEnumeratePhysicalDevices(process->instance, &physical_device_count, NULL);
+    vkEnumeratePhysicalDevices(*process->instance, &physical_device_count, NULL);
 
     if (physical_device_count == 0U)
     {
@@ -267,7 +296,7 @@ extern void physical_device_pick(VkProcess *process, int device_select)
     printf(INF VK_DBG_PREFIX" Found %u physical device(s)\n", physical_device_count);
 
     VkPhysicalDevice *vk_physical_devices = malloc(sizeof(VkPhysicalDevice) * physical_device_count);
-    vkEnumeratePhysicalDevices(process->instance, &physical_device_count, vk_physical_devices);
+    vkEnumeratePhysicalDevices(*process->instance, &physical_device_count, vk_physical_devices);
 
     if (device_select <= -1)
     {
@@ -456,9 +485,10 @@ extern void physical_device_pick(VkProcess *process, int device_select)
         free(candidates);
     }
 
-    process->physical_device = vk_physical_devices[device_select];
+    process->physical_device = malloc(sizeof(VkPhysicalDevice));
+    *process->physical_device = vk_physical_devices[device_select];
     VkPhysicalDeviceProperties properties;
-    vkGetPhysicalDeviceProperties(process->physical_device, &properties);
+    vkGetPhysicalDeviceProperties(*process->physical_device, &properties);
     printf(INF VK_DBG_PREFIX" Selected device: %s\n", properties.deviceName);
     printf(TAB"api version: %u\n", properties.apiVersion);
     printf(TAB"driver version: %u\n", properties.driverVersion);
@@ -470,29 +500,30 @@ extern void physical_device_pick(VkProcess *process, int device_select)
     free(vk_physical_devices);
 }
 
-extern void logical_device_create(VkProcess *process)
+void logical_device_create(VkProcess *process)
 {
     uint32_t queue_family_count;
-    vkGetPhysicalDeviceQueueFamilyProperties(process->physical_device, &queue_family_count, NULL);
+    vkGetPhysicalDeviceQueueFamilyProperties(*process->physical_device, &queue_family_count, NULL);
     VkQueueFamilyProperties *vk_queue_families = malloc(sizeof(VkQueueFamilyProperties) * queue_family_count);
-    vkGetPhysicalDeviceQueueFamilyProperties(process->physical_device, &queue_family_count, vk_queue_families);
+    vkGetPhysicalDeviceQueueFamilyProperties(*process->physical_device, &queue_family_count, vk_queue_families);
 
-    uint32_t graphics_index = queue_family_count;
+    
+    process->graphics_queue_index = queue_family_count;
     for (uint32_t i = 0U; i < queue_family_count; i++)
     {
         VkBool32 is_supported = VK_FALSE;
-        vkGetPhysicalDeviceSurfaceSupportKHR(process->physical_device, i, process->surface, &is_supported);
+        vkGetPhysicalDeviceSurfaceSupportKHR(*process->physical_device, i, *process->surface, &is_supported);
         if
         (
             (vk_queue_families[i].queueFlags & (VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_COMPUTE_BIT | VK_QUEUE_TRANSFER_BIT)) &&
             is_supported
         )
         {
-            graphics_index = i;
+            process->graphics_queue_index = i;
             break;
         }
     }
-    if (graphics_index == queue_family_count)
+    if (process->graphics_queue_index == queue_family_count)
     {
         printf(ERR VK_DBG_PREFIX" Physical device not compatible with requested resources, unable to proceed\n");
         exit(1);
@@ -501,7 +532,7 @@ extern void logical_device_create(VkProcess *process)
     float queue_prioriy = 1.0f;
     VkDeviceQueueCreateInfo device_queue_create_info = (VkDeviceQueueCreateInfo)
     {
-        .queueFamilyIndex = graphics_index,
+        .queueFamilyIndex = process->graphics_queue_index,
         .queueCount = 1U,
         .pQueuePriorities = &queue_prioriy,
         .sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO
@@ -516,6 +547,7 @@ extern void logical_device_create(VkProcess *process)
     VkPhysicalDeviceVulkan13Features vk_physical_device_vk13_feature = (VkPhysicalDeviceVulkan13Features)
     {
         .dynamicRendering = VK_TRUE,
+        .synchronization2 = VK_TRUE,
         .pNext = &vk_physical_device_ext_feature,
         .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES
     };
@@ -547,8 +579,10 @@ extern void logical_device_create(VkProcess *process)
         .sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO
     };
 
-    vkCreateDevice(process->physical_device, &device_create_info, NULL, &process->logical_device);
-    vkGetDeviceQueue(process->logical_device, graphics_index, 0U, &process->graphics_queue);
+    process->logical_device = malloc(sizeof(VkDevice));
+    vkCreateDevice(*process->physical_device, &device_create_info, NULL, process->logical_device);
+    process->graphics_queue = malloc(sizeof(VkQueue));
+    vkGetDeviceQueue(*process->logical_device, process->graphics_queue_index, 0U, process->graphics_queue);
 
     printf(INF VK_DBG_PREFIX" Device created successfully\n");
 
@@ -557,10 +591,7 @@ extern void logical_device_create(VkProcess *process)
 
 static VkExtent2D swap_extent_choose(VkSurfaceCapabilitiesKHR *surface_cap, GLFWwindow *window)
 {
-    if (surface_cap->currentExtent.width != UINT32_MAX)
-    {
-        return surface_cap->currentExtent;
-    }
+    if (surface_cap->currentExtent.width != UINT32_MAX) return surface_cap->currentExtent;
 
     uint32_t width, height = 0U;
     glfwGetFramebufferSize(window, &width, &height);
@@ -581,8 +612,9 @@ static uint32_t swap_min_image_count(VkSurfaceCapabilitiesKHR *surface_cap)
     if
     (
         (surface_cap->maxImageCount > 0U) &&
-        (surface_cap->maxImageCount < surface_cap->minImageCount)
+        (surface_cap->maxImageCount < min_image_count)
     ) return surface_cap->maxImageCount;
+    return min_image_count;
 }
 static VkSurfaceFormatKHR swap_surface_format_choose(VkSurfaceFormatKHR *formats, uint32_t format_count)
 {
@@ -597,7 +629,12 @@ static VkSurfaceFormatKHR swap_surface_format_choose(VkSurfaceFormatKHR *formats
         (
             formats[i].format == VK_FORMAT_B8G8R8A8_SRGB &&
             formats[i].colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR
-        ) printf(INF VK_DBG_PREFIX" Found compatible swapchain surface format\n"); return formats[i];
+        )
+        {
+            printf(INF VK_DBG_PREFIX" Found compatible swapchain surface format\n");
+            return formats[i];
+        } 
+        
     }
     printf(ERR VK_DBG_PREFIX" No suitable surface format for this application, unable to proceed\n");
     exit(1);
@@ -625,33 +662,35 @@ static VkPresentModeKHR swap_surface_present_mode_choose(VkPresentModeKHR *prese
 
     return mailbox ? VK_PRESENT_MODE_MAILBOX_KHR : VK_PRESENT_MODE_FIFO_KHR;
 }
-extern void swapchain_create(VkProcess *process, GLFWwindow *window)
+void swapchain_create(VkProcess *process, GLFWwindow *window)
 {
     VkSurfaceCapabilitiesKHR surface_capabilities;
-    vkGetPhysicalDeviceSurfaceCapabilitiesKHR(process->physical_device, process->surface, &surface_capabilities);
+    vkGetPhysicalDeviceSurfaceCapabilitiesKHR(*process->physical_device, *process->surface, &surface_capabilities);
 
-    process->extent_2d = swap_extent_choose(&surface_capabilities, window);
+    process->extent_2d = malloc(sizeof(VkExtent2D));
+    *process->extent_2d = swap_extent_choose(&surface_capabilities, window);
     uint32_t min_image_count = swap_min_image_count(&surface_capabilities);
 
     uint32_t surface_format_count;
-    vkGetPhysicalDeviceSurfaceFormatsKHR(process->physical_device, process->surface, &surface_format_count, NULL);
+    vkGetPhysicalDeviceSurfaceFormatsKHR(*process->physical_device, *process->surface, &surface_format_count, NULL);
     VkSurfaceFormatKHR *surface_formats = malloc(sizeof(VkSurfaceFormatKHR) * surface_format_count);
-    vkGetPhysicalDeviceSurfaceFormatsKHR(process->physical_device, process->surface, &surface_format_count, surface_formats);
-    process->surface_format = swap_surface_format_choose(surface_formats, surface_format_count);
+    vkGetPhysicalDeviceSurfaceFormatsKHR(*process->physical_device, *process->surface, &surface_format_count, surface_formats);
+    process->surface_format = malloc(sizeof(VkSurfaceFormatKHR));
+    *process->surface_format = swap_surface_format_choose(surface_formats, surface_format_count);
 
     uint32_t present_mode_count;
-    vkGetPhysicalDeviceSurfacePresentModesKHR(process->physical_device, process->surface, &present_mode_count, NULL);
+    vkGetPhysicalDeviceSurfacePresentModesKHR(*process->physical_device, *process->surface, &present_mode_count, NULL);
     VkPresentModeKHR *present_modes = malloc(sizeof(VkPresentModeKHR) * present_mode_count);
-    vkGetPhysicalDeviceSurfacePresentModesKHR(process->physical_device, process->surface, &present_mode_count, present_modes);
+    vkGetPhysicalDeviceSurfacePresentModesKHR(*process->physical_device, *process->surface, &present_mode_count, present_modes);
     VkPresentModeKHR present_mode = swap_surface_present_mode_choose(present_modes, present_mode_count);
 
     VkSwapchainCreateInfoKHR swapchain_create_info = (VkSwapchainCreateInfoKHR)
     {
-        .surface = process->surface,
+        .surface = *process->surface,
         .minImageCount = min_image_count,
-        .imageFormat = process->surface_format.format,
-        .imageColorSpace = process->surface_format.colorSpace,
-        .imageExtent = process->extent_2d,
+        .imageFormat = process->surface_format->format,
+        .imageColorSpace = process->surface_format->colorSpace,
+        .imageExtent = *process->extent_2d,
         .imageArrayLayers = 1,
         .imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
         .imageSharingMode = VK_SHARING_MODE_EXCLUSIVE,
@@ -662,12 +701,13 @@ extern void swapchain_create(VkProcess *process, GLFWwindow *window)
         .sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR
     };
 
-    vkCreateSwapchainKHR(process->logical_device, &swapchain_create_info, NULL, &process->swapchain);
+    process->swapchain = malloc(sizeof(VkSwapchainKHR));
+    vkCreateSwapchainKHR(*process->logical_device, &swapchain_create_info, NULL, process->swapchain);
     uint32_t swapchain_image_count;
-    vkGetSwapchainImagesKHR(process->logical_device, process->swapchain, &swapchain_image_count, NULL);
+    vkGetSwapchainImagesKHR(*process->logical_device, *process->swapchain, &swapchain_image_count, NULL);
     process->image_count = swapchain_image_count;
     process->images = malloc(sizeof(VkImage) * swapchain_image_count);
-    vkGetSwapchainImagesKHR(process->logical_device, process->swapchain, &swapchain_image_count, process->images);
+    vkGetSwapchainImagesKHR(*process->logical_device, *process->swapchain, &swapchain_image_count, process->images);
 
     printf(INF VK_DBG_PREFIX" Swapchain created successfully\n");
 
@@ -675,12 +715,12 @@ extern void swapchain_create(VkProcess *process, GLFWwindow *window)
     free(present_modes);
 }
 
-extern void image_views_create(VkProcess *process)
+void image_views_create(VkProcess *process)
 {
     VkImageViewCreateInfo image_view_create_info = (VkImageViewCreateInfo)
     {
         .viewType = VK_IMAGE_TYPE_2D,
-        .format = process->surface_format.format,
+        .format = process->surface_format->format,
         .subresourceRange = (VkImageSubresourceRange)
         {
             .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
@@ -698,24 +738,386 @@ extern void image_views_create(VkProcess *process)
     for (uint32_t i = 0; i < process->image_view_count; i++)
     {
         image_view_create_info.image = process->images[i];
-        vkCreateImageView(process->logical_device, &image_view_create_info, NULL, &process->image_views[i]);
+        vkCreateImageView(*process->logical_device, &image_view_create_info, NULL, &process->image_views[i]);
     }
     printf(INF VK_DBG_PREFIX" Loaded %u image view(s)\n", process->image_view_count);
 }
 
-extern void graphics_pipeline_create(VkProcess *process)
+void graphics_pipeline_create(VkProcess *process)
 {
-    char *shader_bin = shader_bin_read("slang.spv");
+    const char *shader_file = "slang.spv";
+    uint64_t shader_bin_size;
+    shader_bin_read(shader_file, &shader_bin_size, NULL);
+    uint32_t shader_bin[(shader_bin_size / 4U) + (shader_bin_size % 4U)];
+    shader_bin_read(shader_file, &shader_bin_size, shader_bin);
 
     VkShaderModuleCreateInfo shader_create_info = (VkShaderModuleCreateInfo)
     {
-        .codeSize = sizeof(shader_bin),
-        .pCode = (const uint32_t *)shader_bin,
+        .codeSize = shader_bin_size,
+        .pCode = shader_bin,
         .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO
     };
 
     VkShaderModule shader_module;
-    vkCreateShaderModule(process->logical_device, &shader_create_info, NULL, &shader_module);
+    vkCreateShaderModule(*process->logical_device, &shader_create_info, NULL, &shader_module);
+    
+    VkPipelineShaderStageCreateInfo vertex_shader_create_info = (VkPipelineShaderStageCreateInfo)
+    {
+        .stage = VK_SHADER_STAGE_VERTEX_BIT,
+        .module = shader_module,
+        .pName = "vertMain",
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO
+    };
+    VkPipelineShaderStageCreateInfo fragment_shader_create_info = (VkPipelineShaderStageCreateInfo)
+    {
+        .stage = VK_SHADER_STAGE_FRAGMENT_BIT,
+        .module = shader_module,
+        .pName = "fragMain",
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO
+    };
+
+    VkPipelineShaderStageCreateInfo shader_stage_create_infos[] = {vertex_shader_create_info, fragment_shader_create_info};
+    printf(INF VK_DBG_PREFIX" Shaders loaded successfully\n");
+
+    
+
+    VkPipelineVertexInputStateCreateInfo vertex_create_info = (VkPipelineVertexInputStateCreateInfo)
+    {
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO
+    };
+    VkPipelineInputAssemblyStateCreateInfo input_assembly_create_info = (VkPipelineInputAssemblyStateCreateInfo)
+    {
+        .topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO
+    };
+    
+    VkPipelineViewportStateCreateInfo viewport_state_create_info = (VkPipelineViewportStateCreateInfo)
+    {
+        .viewportCount = 1,
+        .scissorCount = 1,
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO
+    };
+    VkPipelineRasterizationStateCreateInfo rasterizer_create_info = (VkPipelineRasterizationStateCreateInfo)
+    {
+        .depthClampEnable = VK_FALSE,
+        .rasterizerDiscardEnable = VK_FALSE,
+        .polygonMode = VK_POLYGON_MODE_FILL,
+        .cullMode = VK_CULL_MODE_BACK_BIT,
+        .frontFace = VK_FRONT_FACE_CLOCKWISE,
+        .depthBiasEnable = VK_FALSE,
+        .lineWidth = 1.0f,
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO
+    };
+
+    VkPipelineMultisampleStateCreateInfo multisamp_create_info = (VkPipelineMultisampleStateCreateInfo)
+    {
+        .rasterizationSamples = VK_SAMPLE_COUNT_1_BIT,
+        .sampleShadingEnable = VK_FALSE,
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO
+    };
+
+    VkPipelineDepthStencilStateCreateInfo depth_stencil_create_info;
+
+    VkPipelineColorBlendAttachmentState color_blend_attachment = (VkPipelineColorBlendAttachmentState)
+    {
+        .blendEnable = VK_FALSE,
+        .colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT
+    };
+    VkPipelineColorBlendStateCreateInfo color_blend_create_info = (VkPipelineColorBlendStateCreateInfo)
+    {
+        .logicOpEnable = VK_FALSE,
+        .logicOp = VK_LOGIC_OP_COPY,
+        .attachmentCount = 1,
+        .pAttachments = &color_blend_attachment,
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO
+    };
+
+    VkDynamicState dynamic_states[] = {VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR};
+
+    uint32_t dynamic_state_count;
+    ARR_SIZE(&dynamic_state_count, UINT32_MAX, dynamic_states);
+
+    VkPipelineDynamicStateCreateInfo dynamic_state_create_info = (VkPipelineDynamicStateCreateInfo)
+    {
+        .dynamicStateCount = dynamic_state_count,
+        .pDynamicStates = dynamic_states,
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO
+    };
+
+    VkPipelineLayoutCreateInfo pipeline_layout_create_info = (VkPipelineLayoutCreateInfo)
+    {
+        .setLayoutCount = 0,
+        .pushConstantRangeCount = 0,
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO
+    };
+    process->pipeline_layout = malloc(sizeof(VkPipelineLayout));
+    vkCreatePipelineLayout(*process->logical_device, &pipeline_layout_create_info, NULL, process->pipeline_layout);
+    VkPipelineRenderingCreateInfo pipeline_rendering_create_info = (VkPipelineRenderingCreateInfo)
+    {
+        .colorAttachmentCount = 1,
+        .pColorAttachmentFormats = &process->surface_format->format,
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO
+    };
+    VkGraphicsPipelineCreateInfo pipeline_create_info = (VkGraphicsPipelineCreateInfo)
+    {
+        .stageCount = 2,
+        .pStages = shader_stage_create_infos,
+        .pVertexInputState = &vertex_create_info,
+        .pInputAssemblyState = &input_assembly_create_info,
+        .pViewportState = &viewport_state_create_info,
+        .pRasterizationState = &rasterizer_create_info,
+        .pMultisampleState = &multisamp_create_info,
+        .pColorBlendState = &color_blend_create_info,
+        .pDynamicState = &dynamic_state_create_info,
+        .layout = *process->pipeline_layout,
+        .renderPass = NULL,
+        .pNext = &pipeline_rendering_create_info,
+        .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO
+    };
+    
+    process->graphics_pipeline = malloc(sizeof(VkPipeline));
+    vkCreateGraphicsPipelines(*process->logical_device, NULL, 1, &pipeline_create_info, NULL, process->graphics_pipeline);
+    printf(INF VK_DBG_PREFIX" Graphics pipeline created successfully\n");
+}
+void command_pool_create(VkProcess *process)
+{
+    VkCommandPoolCreateInfo pool_create_info = (VkCommandPoolCreateInfo)
+    {
+        .flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
+        .queueFamilyIndex = process->graphics_queue_index,
+        .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO
+    };
+    process->command_pool = malloc(sizeof(VkCommandPool));
+    vkCreateCommandPool(*process->logical_device, &pool_create_info, NULL, process->command_pool);
+    printf(INF VK_DBG_PREFIX" Command pool created successfully\n");
+}
+void command_buffer_create(VkProcess *process)
+{
+    process->command_buffer_count = 1;
+    VkCommandBufferAllocateInfo alloc_info = (VkCommandBufferAllocateInfo)
+    {
+        .commandPool = *process->command_pool,
+        .level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
+        .commandBufferCount = process->command_buffer_count,
+        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO
+    };
+    process->command_buffers = malloc(sizeof(VkCommandBuffer) * process->command_buffer_count);
+    vkAllocateCommandBuffers(*process->logical_device, &alloc_info, process->command_buffers);
+    printf(INF VK_DBG_PREFIX" Allocated 0x%p for command buffer, size: %u byte(s)\n", (void *)process->command_buffers, sizeof(VkCommandBuffer) * process->command_buffer_count);
+}
+static void transition_image_layout
+(
+    VkProcess *proc,
+    uint32_t image_index,
+    VkImageLayout layout_old,
+    VkImageLayout layout_new,
+    VkAccessFlags2 src_access_mask,
+    VkAccessFlags2 dst_access_mask,
+    VkPipelineStageFlags2 src_stage_mask,
+    VkPipelineStageFlags2 dst_stage_mask
+)
+{
+    VkImageMemoryBarrier2 barrier = (VkImageMemoryBarrier2)
+    {
+        .srcStageMask = src_stage_mask,
+        .srcAccessMask = src_access_mask,
+        .dstStageMask = dst_stage_mask,
+        .dstAccessMask = dst_access_mask,
+        .oldLayout = layout_old,
+        .newLayout = layout_new,
+        .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+        .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+        .image = proc->images[image_index],
+        .subresourceRange = (VkImageSubresourceRange)
+        {
+            .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+            .baseMipLevel = 0,
+            .levelCount = 1,
+            .baseArrayLayer = 0,
+            .layerCount = 1
+        },
+        .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2
+    };
+    VkDependencyInfo dependency_info = (VkDependencyInfo)
+    {
+        .dependencyFlags = 0,
+        .imageMemoryBarrierCount = 1,
+        .pImageMemoryBarriers = &barrier,
+        .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO
+    };
+    vkCmdPipelineBarrier2(proc->command_buffers[0], &dependency_info);
+}
+void command_buffer_record(VkProcess *process, uint32_t image_index)
+{
+    VkCommandBufferBeginInfo buffer_begin_info = (VkCommandBufferBeginInfo)
+    {
+        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO
+    };
+    vkBeginCommandBuffer(process->command_buffers[0], &buffer_begin_info);
+
+    transition_image_layout
+    (
+        process,
+        image_index,
+        VK_IMAGE_LAYOUT_UNDEFINED,
+        VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+        0,
+        VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
+        VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+        VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT
+    );
+
+    VkClearValue clear_color = (VkClearValue)
+    {
+        .color = (VkClearColorValue)
+        {
+            .float32 = {0.0f, 0.0f, 0.0f, 1.0f}
+        }
+    };
+    VkRenderingAttachmentInfo attachement_info = (VkRenderingAttachmentInfo)
+    {
+        .imageView = process->image_views[image_index],
+        .imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+        .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+        .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+        .clearValue = clear_color,
+        .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO
+    };
+    VkRenderingInfo render_info = (VkRenderingInfo)
+    {
+        .renderArea = (VkRect2D)
+        {
+            .offset = (VkOffset2D)
+            {
+                0,
+                0
+            },
+            .extent = *process->extent_2d
+        },
+        .layerCount = 1,
+        .colorAttachmentCount = 1,
+        .pColorAttachments = &attachement_info,
+        .sType = VK_STRUCTURE_TYPE_RENDERING_INFO
+    };
+
+    VkViewport viewport = (VkViewport)
+    {
+        .x = 0.0f,
+        .y = 0.0f,
+        .width = (*process->extent_2d).width,
+        .height = (*process->extent_2d).height,
+        .minDepth = 0.0f,
+        .maxDepth = 1.0f
+    };
+
+    VkRect2D scissor = (VkRect2D)
+    {
+        .offset = (VkOffset2D)
+        {
+            .x = 0,
+            .y = 0
+        },
+        .extent = *process->extent_2d
+    };
+    vkCmdBeginRendering(process->command_buffers[0], &render_info);
+    vkCmdBindPipeline(process->command_buffers[0], VK_PIPELINE_BIND_POINT_GRAPHICS, *process->graphics_pipeline);
+    vkCmdSetViewport(process->command_buffers[0], 0, 1, &viewport);
+    vkCmdSetScissor(process->command_buffers[0], 0, 1, &scissor);
+    vkCmdDraw(process->command_buffers[0], 3, 1, 0, 0);
+    vkCmdEndRendering(process->command_buffers[0]);
+    transition_image_layout
+    (
+        process,
+        image_index,
+        VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+        VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+        VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
+        0,
+        VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+        VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT
+    );
+    vkEndCommandBuffer(process->command_buffers[0]);
 }
 
+void sync_object_create(VkProcess *process)
+{
+    process->present_complete_semaphore = malloc(sizeof(VkSemaphore));
+    VkSemaphoreCreateInfo present_sema_create_info = (VkSemaphoreCreateInfo)
+    {
+        .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO
+    };
+    vkCreateSemaphore(*process->logical_device, &present_sema_create_info, NULL, process->present_complete_semaphore);
+
+    process->render_finished_semaphore = malloc(sizeof(VkSemaphore));
+    VkSemaphoreCreateInfo render_sema_create_info = (VkSemaphoreCreateInfo)
+    {
+        .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO
+    };
+    vkCreateSemaphore(*process->logical_device, &render_sema_create_info, NULL, process->render_finished_semaphore);
+
+    process->fence = malloc(sizeof(VkFence));
+    VkFenceCreateInfo fence_create_info = (VkFenceCreateInfo)
+    {
+        .flags = VK_FENCE_CREATE_SIGNALED_BIT,
+        .sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO
+    };
+    vkCreateFence(*process->logical_device, &fence_create_info, NULL, process->fence);
+}
+void frame_draw(VkProcess *process)
+{
+    if (vkWaitForFences(*process->logical_device, 1U, process->fence, VK_TRUE, UINT64_MAX) != VK_SUCCESS)
+    {
+        printf(ERR VK_DBG_PREFIX" Failed to wait for fence, unable to proceed\n");
+        exit(1);
+    }
+    vkResetFences(*process->logical_device, 1U, process->fence);
+
+    VkResult result;
+    uint32_t image_index;
+    result = vkAcquireNextImageKHR
+    (
+        *process->logical_device,
+        *process->swapchain,
+        UINT64_MAX,
+        *process->present_complete_semaphore,
+        NULL,
+        &image_index
+    );
+    command_buffer_record(process, image_index);
+
+    vkQueueWaitIdle(*process->graphics_queue);
+
+    VkPipelineStageFlags stage_mask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+
+    VkSubmitInfo submit_info = (VkSubmitInfo)
+    {
+        .waitSemaphoreCount = 1,
+        .pWaitSemaphores = process->present_complete_semaphore,
+        .pWaitDstStageMask = &stage_mask,
+        .commandBufferCount = process->command_buffer_count,
+        .pCommandBuffers = process->command_buffers,
+        .signalSemaphoreCount = 1,
+        .pSignalSemaphores = process->render_finished_semaphore,
+        .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO
+    };
+    vkQueueSubmit(*process->graphics_queue, 1, &submit_info, *process->fence);
+
+    VkPresentInfoKHR present_info = (VkPresentInfoKHR)
+    {
+        .waitSemaphoreCount = 1,
+        .pWaitSemaphores = process->render_finished_semaphore,
+        .swapchainCount = 1,
+        .pSwapchains = process->swapchain,
+        .pImageIndices = &image_index,
+        .sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR
+    };
+    result = vkQueuePresentKHR(*process->graphics_queue, &present_info);
+    switch (result)
+    {
+        case VK_SUCCESS: break;
+        case VK_SUBOPTIMAL_KHR: printf(WARN VK_DBG_PREFIX" vkQueuePresentKHR returns VK_SUBOPTIMAL_KHR\n"); break;
+        default: printf(WARN VK_DBG_PREFIX" Unexpected result returned from vkQueuePresentKHR\n");
+    }
+ 
+}
 #endif

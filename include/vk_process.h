@@ -62,7 +62,12 @@ VkProcess vk_process_no_args_construct(void)
         .images = NULL,
         .image_views = NULL,
         .pipeline_layout = NULL,
-        .graphics_pipeline = NULL
+        .graphics_pipeline = NULL,
+        .command_pool = NULL,
+        .command_buffers = NULL,
+        .present_complete_semaphore = NULL,
+        .render_finished_semaphore = NULL,
+        .fence = NULL
     };
 }
 static bool enumerate_extension_properties_check(void *properties, uint32_t extension_count, const char *requirement)

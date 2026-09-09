@@ -20,6 +20,19 @@ extern App app_no_args_construct()
         .vk_process = vk_process_no_args_construct()
     };
 }
+static void swapchain_cleanup()
+{
+
+}
+static void swapchain_recreate(App *app)
+{
+    vkDeviceWaitIdle(*app->vk_process.logical_device);
+
+    swapchain_cleanup();
+
+    swapchain_create(&app->vk_process, app->window);
+    image_views_create(&app->vk_process);
+}
 static void window_init(GLFWwindow **window)
 {
     glfwInit();

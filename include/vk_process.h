@@ -11,6 +11,7 @@
 #include "debugger.h"
 #include "main.h"
 
+#define MAX_FRAMES_IN_FLIGHT 2
 #define VALIDATION_LAYER_COUNT 1
 const char *validation_layers[VALIDATION_LAYER_COUNT] = {"VK_LAYER_KHRONOS_validation"};
 
@@ -39,11 +40,13 @@ typedef struct
     VkPipelineLayout *pipeline_layout;
     VkPipeline *graphics_pipeline;
     VkCommandPool *command_pool;
-    uint32_t command_buffer_count;
+    //uint32_t command_buffer_count;
+    uint32_t frame_index;
     VkCommandBuffer *command_buffers;
     VkSemaphore *present_complete_semaphore;
     VkSemaphore *render_finished_semaphore;
     VkFence *fence;
+    bool window_resized_event;
     
 } VkProcess;
 
@@ -67,7 +70,9 @@ VkProcess vk_process_no_args_construct(void)
         .command_buffers = NULL,
         .present_complete_semaphore = NULL,
         .render_finished_semaphore = NULL,
-        .fence = NULL
+        .fence = NULL,
+        .frame_index = 0,
+        .window_resized_event = false
     };
 }
 static bool enumerate_extension_properties_check(void *properties, uint32_t extension_count, const char *requirement)
@@ -898,17 +903,16 @@ void command_pool_create(VkProcess *process)
 }
 void command_buffer_create(VkProcess *process)
 {
-    process->command_buffer_count = 1;
     VkCommandBufferAllocateInfo alloc_info = (VkCommandBufferAllocateInfo)
     {
         .commandPool = *process->command_pool,
         .level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
-        .commandBufferCount = process->command_buffer_count,
+        .commandBufferCount = MAX_FRAMES_IN_FLIGHT,
         .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO
     };
-    process->command_buffers = malloc(sizeof(VkCommandBuffer) * process->command_buffer_count);
+    process->command_buffers = malloc(sizeof(VkCommandBuffer) * MAX_FRAMES_IN_FLIGHT);
     vkAllocateCommandBuffers(*process->logical_device, &alloc_info, process->command_buffers);
-    printf(INF VK_DBG_PREFIX" Allocated 0x%p for command buffer, size: %u byte(s)\n", (void *)process->command_buffers, sizeof(VkCommandBuffer) * process->command_buffer_count);
+    printf(INF VK_DBG_PREFIX" Allocated 0x%p for command buffer, size: %u byte(s)\n", (void *)process->command_buffers, sizeof(VkCommandBuffer) * MAX_FRAMES_IN_FLIGHT);
 }
 static void transition_image_layout
 (
@@ -950,7 +954,7 @@ static void transition_image_layout
         .pImageMemoryBarriers = &barrier,
         .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO
     };
-    vkCmdPipelineBarrier2(proc->command_buffers[0], &dependency_info);
+    vkCmdPipelineBarrier2(proc->command_buffers[proc->frame_index], &dependency_info);
 }
 void command_buffer_record(VkProcess *process, uint32_t image_index)
 {
@@ -958,7 +962,7 @@ void command_buffer_record(VkProcess *process, uint32_t image_index)
     {
         .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO
     };
-    vkBeginCommandBuffer(process->command_buffers[0], &buffer_begin_info);
+    vkBeginCommandBuffer(process->command_buffers[process->frame_index], &buffer_begin_info);
 
     transition_image_layout
     (
@@ -1024,12 +1028,12 @@ void command_buffer_record(VkProcess *process, uint32_t image_index)
         },
         .extent = *process->extent_2d
     };
-    vkCmdBeginRendering(process->command_buffers[0], &render_info);
-    vkCmdBindPipeline(process->command_buffers[0], VK_PIPELINE_BIND_POINT_GRAPHICS, *process->graphics_pipeline);
-    vkCmdSetViewport(process->command_buffers[0], 0, 1, &viewport);
-    vkCmdSetScissor(process->command_buffers[0], 0, 1, &scissor);
-    vkCmdDraw(process->command_buffers[0], 3, 1, 0, 0);
-    vkCmdEndRendering(process->command_buffers[0]);
+    vkCmdBeginRendering(process->command_buffers[process->frame_index], &render_info);
+    vkCmdBindPipeline(process->command_buffers[process->frame_index], VK_PIPELINE_BIND_POINT_GRAPHICS, *process->graphics_pipeline);
+    vkCmdSetViewport(process->command_buffers[process->frame_index], 0, 1, &viewport);
+    vkCmdSetScissor(process->command_buffers[process->frame_index], 0, 1, &scissor);
+    vkCmdDraw(process->command_buffers[process->frame_index], 3, 1, 0, 0);
+    vkCmdEndRendering(process->command_buffers[process->frame_index]);
     transition_image_layout
     (
         process,
@@ -1041,41 +1045,81 @@ void command_buffer_record(VkProcess *process, uint32_t image_index)
         VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
         VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT
     );
-    vkEndCommandBuffer(process->command_buffers[0]);
+    vkEndCommandBuffer(process->command_buffers[process->frame_index]);
 }
 
 void sync_object_create(VkProcess *process)
 {
-    process->present_complete_semaphore = malloc(sizeof(VkSemaphore));
+    process->present_complete_semaphore = malloc(sizeof(VkSemaphore) * MAX_FRAMES_IN_FLIGHT);
     VkSemaphoreCreateInfo present_sema_create_info = (VkSemaphoreCreateInfo)
     {
         .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO
     };
-    vkCreateSemaphore(*process->logical_device, &present_sema_create_info, NULL, process->present_complete_semaphore);
+    for (uint32_t i = 0U; i < MAX_FRAMES_IN_FLIGHT; i++)
+    {
+        vkCreateSemaphore(*process->logical_device, &present_sema_create_info, NULL, &(process->present_complete_semaphore[i]));
+    }
 
-    process->render_finished_semaphore = malloc(sizeof(VkSemaphore));
+    process->render_finished_semaphore = malloc(sizeof(VkSemaphore) * MAX_FRAMES_IN_FLIGHT);
     VkSemaphoreCreateInfo render_sema_create_info = (VkSemaphoreCreateInfo)
     {
         .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO
     };
-    vkCreateSemaphore(*process->logical_device, &render_sema_create_info, NULL, process->render_finished_semaphore);
+    for (uint32_t i = 0U; i < MAX_FRAMES_IN_FLIGHT; i++)
+    {
+        vkCreateSemaphore(*process->logical_device, &render_sema_create_info, NULL, &(process->render_finished_semaphore[i]));
+    }
 
-    process->fence = malloc(sizeof(VkFence));
+    process->fence = malloc(sizeof(VkFence) * MAX_FRAMES_IN_FLIGHT);
     VkFenceCreateInfo fence_create_info = (VkFenceCreateInfo)
     {
         .flags = VK_FENCE_CREATE_SIGNALED_BIT,
         .sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO
     };
-    vkCreateFence(*process->logical_device, &fence_create_info, NULL, process->fence);
+    for (uint32_t i = 0U; i < MAX_FRAMES_IN_FLIGHT; i++)
+    {
+        vkCreateFence(*process->logical_device, &fence_create_info, NULL, &(process->fence[i]));
+    }
 }
-void frame_draw(VkProcess *process)
+static void swapchain_cleanup(VkProcess *process)
 {
-    if (vkWaitForFences(*process->logical_device, 1U, process->fence, VK_TRUE, UINT64_MAX) != VK_SUCCESS)
+    vkDestroySwapchainKHR(*process->logical_device, *process->swapchain, NULL);
+    free(process->extent_2d);
+    free(process->images);
+    free(process->image_views);
+    free(process->swapchain);
+    process->extent_2d = NULL;
+    process->images = NULL;
+    process->image_views = NULL;
+    process->swapchain = NULL;
+}
+static void swapchain_recreate(VkProcess *process, GLFWwindow *window)
+{
+    int width;
+    int height;
+    glfwGetFramebufferSize(window, &width, &height);
+
+    while ((width == 0 || height == 0) && !glfwWindowShouldClose(window)) //minimizing
+    {
+        glfwGetFramebufferSize(window, &width, &height);
+        glfwWaitEvents();
+    }
+    if (glfwWindowShouldClose(window)) return;
+
+    vkDeviceWaitIdle(*process->logical_device);
+
+    swapchain_cleanup(process);
+
+    swapchain_create(process, window);
+    image_views_create(process);
+}
+void frame_draw(VkProcess *process, GLFWwindow *window)
+{
+    if (vkWaitForFences(*process->logical_device, 1U, &process->fence[process->frame_index], VK_TRUE, UINT64_MAX) != VK_SUCCESS)
     {
         printf(ERR VK_DBG_PREFIX" Failed to wait for fence, unable to proceed\n");
         exit(1);
     }
-    vkResetFences(*process->logical_device, 1U, process->fence);
 
     VkResult result;
     uint32_t image_index;
@@ -1084,10 +1128,24 @@ void frame_draw(VkProcess *process)
         *process->logical_device,
         *process->swapchain,
         UINT64_MAX,
-        *process->present_complete_semaphore,
+        process->present_complete_semaphore[process->frame_index],
         NULL,
         &image_index
     );
+    switch (result)
+    {
+        case VK_SUCCESS:
+            vkResetFences(*process->logical_device, 1U, &process->fence[process->frame_index]);    
+            break;
+        case VK_SUBOPTIMAL_KHR:
+            swapchain_recreate(process, window);
+            return;
+        case VK_ERROR_OUT_OF_DATE_KHR:
+            swapchain_recreate(process, window);
+            return;
+        default:
+            printf(WARN VK_DBG_PREFIX" Unexpected result returned from vkAcquireNextImageKHR code %d\n", result);
+    }
     command_buffer_record(process, image_index);
 
     vkQueueWaitIdle(*process->graphics_queue);
@@ -1097,32 +1155,57 @@ void frame_draw(VkProcess *process)
     VkSubmitInfo submit_info = (VkSubmitInfo)
     {
         .waitSemaphoreCount = 1,
-        .pWaitSemaphores = process->present_complete_semaphore,
+        .pWaitSemaphores = &process->present_complete_semaphore[process->frame_index],
         .pWaitDstStageMask = &stage_mask,
-        .commandBufferCount = process->command_buffer_count,
-        .pCommandBuffers = process->command_buffers,
+        .commandBufferCount = 1,
+        .pCommandBuffers = &process->command_buffers[process->frame_index],
         .signalSemaphoreCount = 1,
-        .pSignalSemaphores = process->render_finished_semaphore,
+        .pSignalSemaphores = &process->render_finished_semaphore[process->frame_index],
         .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO
     };
-    vkQueueSubmit(*process->graphics_queue, 1, &submit_info, *process->fence);
+    vkQueueSubmit(*process->graphics_queue, 1, &submit_info, process->fence[process->frame_index]);
 
     VkPresentInfoKHR present_info = (VkPresentInfoKHR)
     {
         .waitSemaphoreCount = 1,
-        .pWaitSemaphores = process->render_finished_semaphore,
+        .pWaitSemaphores = &process->render_finished_semaphore[process->frame_index],
         .swapchainCount = 1,
         .pSwapchains = process->swapchain,
         .pImageIndices = &image_index,
         .sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR
     };
     result = vkQueuePresentKHR(*process->graphics_queue, &present_info);
-    switch (result)
+    // switch (result)
+    // {
+    //     case VK_SUCCESS:
+    //         //printf(INF VK_DBG_PREFIX" ");
+    //         break;
+    //     case VK_SUBOPTIMAL_KHR:
+    //         swapchain_recreate(process, window);
+    //         break;
+    //     case VK_ERROR_OUT_OF_DATE_KHR:
+    //         swapchain_recreate(process, window);
+    //         break;
+    //     default:
+    //         printf(WARN VK_DBG_PREFIX" Unexpected result returned from vkQueuePresentKHR code %d\n", result);
+    // }
+
+    if (result == VK_SUCCESS);
+    else if
+    (
+        result == VK_SUBOPTIMAL_KHR ||
+        result == VK_ERROR_OUT_OF_DATE_KHR
+    )
     {
-        case VK_SUCCESS: break;
-        case VK_SUBOPTIMAL_KHR: printf(WARN VK_DBG_PREFIX" vkQueuePresentKHR returns VK_SUBOPTIMAL_KHR\n"); break;
-        default: printf(WARN VK_DBG_PREFIX" Unexpected result returned from vkQueuePresentKHR\n");
+        swapchain_recreate(process, window);
+    } else if (process->window_resized_event)
+    {
+        process->window_resized_event = false;
+        swapchain_recreate(process, window);
     }
+
+    process->frame_index++;
+    if (process->frame_index >= MAX_FRAMES_IN_FLIGHT) process->frame_index = 0;
  
 }
 #endif

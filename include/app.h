@@ -3,6 +3,7 @@
 
 #include "GLFW/glfw3.h"
 #include "vk_process.h"
+#include "CGLM/types.h"
 
 #define VIEW_PORT_WIDTH 1000
 #define VIEW_PORT_HEIGHT 760
@@ -20,26 +21,20 @@ extern App app_no_args_construct()
         .vk_process = vk_process_no_args_construct()
     };
 }
-static void swapchain_cleanup()
+static void frame_buffer_size_callback(GLFWwindow *window, int width, int height)
 {
-
+    App *app = glfwGetWindowUserPointer(window);
+    app->vk_process.window_resized_event = true;
 }
-static void swapchain_recreate(App *app)
-{
-    vkDeviceWaitIdle(*app->vk_process.logical_device);
-
-    swapchain_cleanup();
-
-    swapchain_create(&app->vk_process, app->window);
-    image_views_create(&app->vk_process);
-}
-static void window_init(GLFWwindow **window)
+static void window_init(GLFWwindow **window, App *app)
 {
     glfwInit();
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-    glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
+    glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE);
 
     *window = glfwCreateWindow(VIEW_PORT_WIDTH, VIEW_PORT_HEIGHT, "Vulkan", NULL, NULL);
+    glfwSetWindowUserPointer(*window, app);
+    glfwSetFramebufferSizeCallback(*window, &frame_buffer_size_callback);
 }
 static void vulkan_init(App *app)
 {
@@ -61,7 +56,7 @@ static void main_loop(App *app)
     for(;!glfwWindowShouldClose(app->window);)
     {
         glfwPollEvents();
-        frame_draw(&app->vk_process);
+        frame_draw(&app->vk_process, app->window);
     }
     vkDeviceWaitIdle(*app->vk_process.logical_device);
 }
@@ -112,7 +107,7 @@ static void clean_up(App *app)
 
 extern void run(App *app)
 {
-    window_init(&app->window);
+    window_init(&app->window, app);
     vulkan_init(app);
     main_loop(app);
     clean_up(app);

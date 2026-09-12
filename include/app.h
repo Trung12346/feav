@@ -13,7 +13,7 @@ typedef struct
     VkProcess vk_process;
     int gpu_select_flag;
 } App;
-extern App app_no_args_construct()
+App app_no_args_construct()
 {
     return (App)
     {
@@ -48,6 +48,7 @@ static void vulkan_init(App *app)
     image_views_create(&app->vk_process);
     graphics_pipeline_create(&app->vk_process);
     command_pool_create(&app->vk_process);
+    vertex_buffer_create(&app->vk_process);
     command_buffer_create(&app->vk_process);
     sync_object_create(&app->vk_process);
 }
@@ -63,6 +64,7 @@ static void main_loop(App *app)
 static void vulkan_destroy(VkProcess *process)
 {
     VkDevice *device = process->logical_device;
+    vkDestroyBuffer(*device, *process->vertex_buffer, NULL);
     vkDestroyCommandPool(*device, *process->command_pool, NULL);
     vkDestroySemaphore(*device, *process->present_complete_semaphore, NULL);
     vkDestroySemaphore(*device, *process->render_finished_semaphore, NULL);
@@ -96,6 +98,8 @@ static void vulkan_destroy(VkProcess *process)
     free(process->command_buffers);
     free(process->present_complete_semaphore);
     free(process->render_finished_semaphore);
+    free(process->vertex_buffer);
+    free(process->vertex_buffer_gmem);
     
 }
 static void clean_up(App *app)
@@ -105,7 +109,7 @@ static void clean_up(App *app)
     glfwTerminate();
 }
 
-extern void run(App *app)
+void run(App *app)
 {
     window_init(&app->window, app);
     vulkan_init(app);

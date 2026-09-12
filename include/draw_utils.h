@@ -3,10 +3,7 @@
 
 #include "cglm/types.h"
 
-typedef struct {
-    vec2 pos;
-    vec4 color;
-} Vertex;
+
 
 
 #endif

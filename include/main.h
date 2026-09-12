@@ -41,7 +41,7 @@ extern void shader_bin_read(const char *file, uint64_t *p_size, uint32_t *p_buff
     char path[128];
     snprintf(path, sizeof(path), "../shaders/build/%s", file);
 
-    FILE *spv = fopen(path, "r");
+    FILE *spv = fopen(path, "rb");
     if (spv == NULL)
     {
         printf(ERR SYS_DBG_PREFIX" Unable to read shader, exitting\n");
@@ -59,7 +59,14 @@ extern void shader_bin_read(const char *file, uint64_t *p_size, uint32_t *p_buff
         return;
     }
     
-    fread(p_buffer, sizeof(char), size, spv);
+    size_t read_size = fread(p_buffer, sizeof(char), size, spv);
+    if (read_size != size)
+    {
+        fclose(spv);
+        printf(ERR SYS_DBG_PREFIX" Error occured when reading shader, exitting\n");
+        exit(1);
+    }
+
     fclose(spv);
 }
 // extern uint64_t arr_size(void *p_arr, uint64_t return_size)

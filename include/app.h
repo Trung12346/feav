@@ -49,6 +49,7 @@ static void vulkan_init(App *app)
     graphics_pipeline_create(&app->vk_process);
     command_pool_create(&app->vk_process);
     vertex_buffer_create(&app->vk_process);
+    index_buffer_create(&app->vk_process);
     command_buffer_create(&app->vk_process);
     sync_object_create(&app->vk_process);
 }
@@ -65,6 +66,7 @@ static void vulkan_destroy(VkProcess *process)
 {
     VkDevice *device = process->logical_device;
     vkDestroyBuffer(*device, *process->vertex_buffer, NULL);
+    vkDestroyBuffer(*device, *process->index_buffer, NULL);
     vkDestroyCommandPool(*device, *process->command_pool, NULL);
     vkDestroySemaphore(*device, *process->present_complete_semaphore, NULL);
     vkDestroySemaphore(*device, *process->render_finished_semaphore, NULL);
@@ -100,6 +102,8 @@ static void vulkan_destroy(VkProcess *process)
     free(process->render_finished_semaphore);
     free(process->vertex_buffer);
     free(process->vertex_buffer_gmem);
+    free(process->index_buffer);
+    free(process->index_buffer_gmem);
     
 }
 static void clean_up(App *app)

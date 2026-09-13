@@ -41,7 +41,6 @@ typedef struct
     VkPipelineLayout *pipeline_layout;
     VkPipeline *graphics_pipeline;
     VkCommandPool *command_pool;
-    //uint32_t command_buffer_count;
     uint32_t frame_index;
     VkCommandBuffer *command_buffers;
     VkSemaphore *present_complete_semaphore;
@@ -51,8 +50,15 @@ typedef struct
 
     VkBuffer *vertex_buffer;
     VkDeviceMemory *vertex_buffer_gmem;
+    VkBuffer *index_buffer;
+    VkDeviceMemory *index_buffer_gmem;
     
 } VkProcess;
+
+typedef struct {
+    VkBuffer *buffer;
+    VkDeviceMemory *gmem;
+} MemInt;
 
 typedef struct {
     vec2 pos;
@@ -90,11 +96,14 @@ VkProcess vk_process_no_args_construct(void)
 }
 
 
-const Vertex vertices[] =
-{
-    (Vertex){(vec2){0.0f, -0.5f}, (vec4){1.0f, 0.0f, 0.0f, 1.0f}},
-    (Vertex){(vec2){0.5f, 0.5f}, (vec4){0.0f, 1.0f, 0.0f, 1.0f}},
-    (Vertex){(vec2){-0.5f, 0.5f}, (vec4){0.0f, 0.0f, 1.0f, 1.0f}}
+const Vertex vertices[] = {
+    {{0.0f, 0.0f}, {1.0f, 0.0f, 0.0f, 1.0f}},
+    {{1.0f, 0.0f}, {0.0f, 1.0f, 0.0f, 1.0f}},
+    {{1.0f, 1.0f}, {0.0f, 0.0f, 1.0f, 1.0f}},
+    {{0.0f, 1.0f}, {1.0f, 1.0f, 1.0f, 1.0f}}
+};
+const uint8_t indices[] = {
+    0, 1, 2, 2, 3, 0
 };
 
 uint32_t mem_typeof(VkPhysicalDevice *device, uint32_t type_filter, VkMemoryPropertyFlags properties)
@@ -109,6 +118,66 @@ uint32_t mem_typeof(VkPhysicalDevice *device, uint32_t type_filter, VkMemoryProp
             return i;
         }
     }
+}
+void gmem_buffer_create(VkPhysicalDevice *phys_device, VkDevice *device, VkDeviceSize d_size, VkBufferUsageFlags usage, VkMemoryAllocateFlags properties, MemInt *p_mem_inter)
+{
+    VkBufferCreateInfo buffer_create_info = (VkBufferCreateInfo)
+    {
+        .size = d_size,
+        .usage = usage,
+        .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
+        .flags = 0,
+        .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO
+    };
+    vkCreateBuffer(*device, &buffer_create_info, NULL, p_mem_inter->buffer);
+
+    VkMemoryRequirements mem_requirements;
+    vkGetBufferMemoryRequirements(*device, *p_mem_inter->buffer, &mem_requirements);
+
+    VkMemoryAllocateInfo gmalloc_info = (VkMemoryAllocateInfo)
+    {
+        .allocationSize = mem_requirements.size,
+        .memoryTypeIndex = mem_typeof(phys_device, mem_requirements.memoryTypeBits, properties),
+        .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO
+    };
+
+    vkAllocateMemory(*device, &gmalloc_info, NULL, p_mem_inter->gmem);
+    vkBindBufferMemory(*device, *p_mem_inter->buffer, *p_mem_inter->gmem, 0);
+}
+
+void buffer_cpy(VkQueue *queue, VkDevice *device, VkCommandPool *pool, VkBuffer dst, VkBuffer src, VkDeviceSize size)
+{
+    VkCommandBufferAllocateInfo cmd_buffer_alloc_info = (VkCommandBufferAllocateInfo)
+    {
+        .commandPool = *pool,
+        .level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
+        .commandBufferCount = 1,
+        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO
+    };
+
+    VkCommandBuffer cmd_buffer;
+    vkAllocateCommandBuffers(*device, &cmd_buffer_alloc_info, &cmd_buffer);
+
+    VkCommandBufferBeginInfo buffer_begin_info = (VkCommandBufferBeginInfo)
+    {
+        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO
+    };
+    vkBeginCommandBuffer(cmd_buffer, &buffer_begin_info);
+    VkBufferCopy buffer_region = {
+        .srcOffset = 0,
+        .dstOffset = 0,
+        .size = size
+    };
+    vkCmdCopyBuffer(cmd_buffer, src, dst, 1U, &buffer_region);
+    vkEndCommandBuffer(cmd_buffer);
+    VkSubmitInfo submit_info = (VkSubmitInfo)
+    {
+        .commandBufferCount = 1U,
+        .pCommandBuffers = &cmd_buffer,
+        .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO
+    };
+    vkQueueSubmit(*queue, 1U, &submit_info, NULL);
+    vkQueueWaitIdle(*queue);
 }
 
 VkVertexInputBindingDescription bind_descript(void)
@@ -621,11 +690,17 @@ void logical_device_create(VkProcess *process)
         .pNext = NULL,
         .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTENDED_DYNAMIC_STATE_FEATURES_EXT
     };
+    VkPhysicalDeviceVulkan14Features vk_physical_device_vk14_feature = (VkPhysicalDeviceVulkan14Features)
+    {
+        .indexTypeUint8 = VK_TRUE,
+        .pNext = &vk_physical_device_ext_feature,
+        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_4_FEATURES
+    };
     VkPhysicalDeviceVulkan13Features vk_physical_device_vk13_feature = (VkPhysicalDeviceVulkan13Features)
     {
         .dynamicRendering = VK_TRUE,
         .synchronization2 = VK_TRUE,
-        .pNext = &vk_physical_device_ext_feature,
+        .pNext = &vk_physical_device_vk14_feature,
         .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES
     };
     VkPhysicalDeviceVulkan11Features vk_physical_device_vk11_feature = (VkPhysicalDeviceVulkan11Features)
@@ -1034,41 +1109,103 @@ static void transition_image_layout
     vkCmdPipelineBarrier2(proc->command_buffers[proc->frame_index], &dependency_info);
 }
 void vertex_buffer_create(VkProcess *process)
-{
-    VkBufferCreateInfo buffer_create_info = (VkBufferCreateInfo)
-    {
-        .size = sizeof(vertices),
-        .usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
-        .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
-        .flags = 0,
-        .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO
-    };
-    process->vertex_buffer = malloc(sizeof(VkBufferCreateInfo));
-    vkCreateBuffer(*process->logical_device, &buffer_create_info, NULL, process->vertex_buffer);
+{ 
+    size_t size = sizeof(vertices);
 
-    VkMemoryRequirements mem_requirements;
-    vkGetBufferMemoryRequirements(*process->logical_device, *process->vertex_buffer, &mem_requirements);
-
-    VkMemoryAllocateInfo gmalloc_info = (VkMemoryAllocateInfo)
+    VkBuffer staging_b;
+    VkDeviceMemory staging_gmem;
+    MemInt staging_buffer = (MemInt)
     {
-        .allocationSize = mem_requirements.size,
-        .memoryTypeIndex = mem_typeof(process->physical_device, mem_requirements.memoryTypeBits, VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT),
-        .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO
+        &staging_b,
+        &staging_gmem
     };
 
-    process->vertex_buffer_gmem = malloc(sizeof(VkDeviceMemory));
-    vkAllocateMemory(*process->logical_device, &gmalloc_info, NULL, process->vertex_buffer_gmem);
-    vkBindBufferMemory(*process->logical_device, *process->vertex_buffer, *process->vertex_buffer_gmem, 0);
-
-    printf(INF VK_DBG_PREFIX" Allocated 0x%p for vertex buffer, size: %u byte(s)\n", (void *)process->vertex_buffer_gmem, sizeof(process->vertex_buffer_gmem));
+    gmem_buffer_create
+    (
+        process->physical_device,
+        process->logical_device,
+        size,
+        VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+        &staging_buffer
+    );
 
     void *data;
-    vkMapMemory(*process->logical_device, *process->vertex_buffer_gmem, 0, buffer_create_info.size, 0, &data);
-    memcpy(data, vertices, buffer_create_info.size);
-    vkUnmapMemory(*process->logical_device, *process->vertex_buffer_gmem);
+    vkMapMemory(*process->logical_device, staging_gmem, 0, (VkDeviceSize)size, 0, &data);
+    memcpy(data, vertices, size);
+    vkUnmapMemory(*process->logical_device, staging_gmem);
 
+    process->vertex_buffer = malloc(sizeof(VkBuffer));
+    process->vertex_buffer_gmem = malloc(sizeof(VkDeviceMemory));
+    printf(INF VK_DBG_PREFIX" Allocated 0x%p for vertex buffer, size: %u byte(s)\n", (void *)process->vertex_buffer_gmem, sizeof(process->vertex_buffer_gmem));
+
+    MemInt vertex_buffer = (MemInt)
+    {
+        process->vertex_buffer,
+        process->vertex_buffer_gmem
+    };
+    gmem_buffer_create
+    (
+        process->physical_device,
+        process->logical_device,
+        size,
+        VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+        &vertex_buffer
+    );
+
+    buffer_cpy(process->graphics_queue, process->logical_device, process->command_pool, *process->vertex_buffer, staging_b, size);
+    
 }
+void index_buffer_create(VkProcess *process)
+{ 
+    size_t size = sizeof(indices);
 
+    VkBuffer staging_b;
+    VkDeviceMemory staging_gmem;
+    MemInt staging_buffer = (MemInt)
+    {
+        &staging_b,
+        &staging_gmem
+    };
+
+    gmem_buffer_create
+    (
+        process->physical_device,
+        process->logical_device,
+        size,
+        VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+        &staging_buffer
+    );
+
+    void *data;
+    vkMapMemory(*process->logical_device, staging_gmem, 0, (VkDeviceSize)size, 0, &data);
+    memcpy(data, indices, size);
+    vkUnmapMemory(*process->logical_device, staging_gmem);
+
+    process->index_buffer = malloc(sizeof(VkBuffer));
+    process->index_buffer_gmem = malloc(sizeof(VkDeviceMemory));
+    printf(INF VK_DBG_PREFIX" Allocated 0x%p for index buffer, size: %u byte(s)\n", (void *)process->index_buffer_gmem, sizeof(process->index_buffer_gmem));
+
+    MemInt index_buffer = (MemInt)
+    {
+        process->index_buffer,
+        process->index_buffer_gmem
+    };
+    gmem_buffer_create
+    (
+        process->physical_device,
+        process->logical_device,
+        size,
+        VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+        &index_buffer
+    );
+
+    buffer_cpy(process->graphics_queue, process->logical_device, process->command_pool, *process->index_buffer, staging_b, size);
+    
+}
 void command_buffer_record(VkProcess *process, uint32_t image_index)
 {
     VkCommandBufferBeginInfo buffer_begin_info = (VkCommandBufferBeginInfo)
@@ -1145,6 +1282,7 @@ void command_buffer_record(VkProcess *process, uint32_t image_index)
     vkCmdBindPipeline(process->command_buffers[process->frame_index], VK_PIPELINE_BIND_POINT_GRAPHICS, *process->graphics_pipeline);
 
     vkCmdBindVertexBuffers(process->command_buffers[process->frame_index], 0, 1, process->vertex_buffer, &(VkDeviceSize){0});
+    vkCmdBindIndexBuffer(process->command_buffers[process->frame_index], *process->index_buffer, 0, VK_INDEX_TYPE_UINT8);
 
     vkCmdSetViewport(process->command_buffers[process->frame_index], 0, 1, &viewport);
     vkCmdSetScissor(process->command_buffers[process->frame_index], 0, 1, &scissor);
@@ -1152,7 +1290,9 @@ void command_buffer_record(VkProcess *process, uint32_t image_index)
     uint32_t vertex_count;
     ARR_SIZE(&vertex_count, UINT32_MAX, vertices);
 
-    vkCmdDraw(process->command_buffers[process->frame_index], vertex_count, 1, 0, 0);
+    uint32_t index_count;
+    ARR_SIZE(&index_count, UINT32_MAX, indices);
+    vkCmdDrawIndexed(process->command_buffers[process->frame_index], index_count, 1U, 0U, 0, 0U);
     vkCmdEndRendering(process->command_buffers[process->frame_index]);
     transition_image_layout
     (

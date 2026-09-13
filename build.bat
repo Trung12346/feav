@@ -1,6 +1,4 @@
-rmdir /s /q build
-
-mkdir build
+del build\main.exe
 
 gcc -g -std=c99 ^
 src\main.c ^

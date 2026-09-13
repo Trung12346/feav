@@ -24,7 +24,7 @@ typedef enum
     true
 } bool;
 
-extern uint32_t unsigned_type_width_resolver(uintmax_t type)
+uint32_t unsigned_type_width_resolver(uintmax_t type)
 {
     switch (type)
     {
@@ -36,7 +36,7 @@ extern uint32_t unsigned_type_width_resolver(uintmax_t type)
     }
 }
 
-extern void shader_bin_read(const char *file, uint64_t *p_size, uint32_t *p_buffer)
+void shader_bin_read(const char *file, uint64_t *p_size, uint32_t *p_buffer)
 {
     char path[128];
     snprintf(path, sizeof(path), "../shaders/build/%s", file);

@@ -8,6 +8,16 @@
 // #include "cglm/"
 #include "app.h"
 #include "main.h"
+#include "interpreter/preprocessor.h"
+
+#ifndef ARG_VAL
+#define ARG_VAL char*value=argv[i+1];if(strncmp(value,"--", 2) == 0){printf(ERR SYS_DBG_PREFIX" Invalid argument for %s",argv[i]);exit(1);}
+#endif
+
+uint8_t preproc_argc = 0;
+char *preproc_argv[2];
+
+
 
 int main(int argc, char **argv)
 {
@@ -34,6 +44,14 @@ int main(int argc, char **argv)
             } else if (strcmp(argv[i], "--no-console") == 0)
             {
                 ShowWindow(console, SW_HIDE);
+            } else if (strcmp(argv[i], "--preproc-out") == 0 && i + 1 < argc)
+            {
+                ARG_VAL
+                preproc_argc += 2;
+                preproc_argv[preproc_argc - 2] = "--out";
+                preproc_argv[preproc_argc - 1] = value;
+
+                printf("%s %s\n", preproc_argv[preproc_argc - 2], preproc_argv[preproc_argc - 1]);
             }
 
             //special operation
@@ -49,7 +67,8 @@ int main(int argc, char **argv)
     
     if (!is_special_op)
     {
-        run(&app);
+        // run(&app);
+        preprocess(preproc_argc, preproc_argv);
     }
     
     

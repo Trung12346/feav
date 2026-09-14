@@ -5,7 +5,7 @@
 
 void file_read(const char *file, uint64_t *p_size, char *p_buffer)
 {
-    FILE *f = fopen(file, "r");
+    FILE *f = fopen(file, "rb");
     if (f == NULL)
     {
         printf(ERR SYS_DBG_PREFIX" Unable to read file, exitting\n");
@@ -17,7 +17,7 @@ void file_read(const char *file, uint64_t *p_size, char *p_buffer)
 
     *p_size = size;
 
-    if (p_buffer == NULL) 
+    if (p_buffer == NULL)
     {
         fclose(f);
         return;
@@ -31,5 +31,19 @@ void file_read(const char *file, uint64_t *p_size, char *p_buffer)
         exit(1);
     }
 
+    fclose(f);
+}
+
+void create_write_file(const char *file, void *src, size_t size)
+{
+    FILE *f = fopen(file, "wb");
+
+    if (f == NULL)
+    {
+        printf(ERR SYS_DBG_PREFIX" Unable to read file, exitting\n");
+        exit(1);
+    }
+
+    fwrite(src, 1, size, f);
     fclose(f);
 }

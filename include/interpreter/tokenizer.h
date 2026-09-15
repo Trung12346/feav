@@ -84,12 +84,12 @@ void tokenize(int argc, char **argv, char *src, uint64_t src_size, char **dst, u
             strt_tag_ind = i + 1;
             tok_in_tag = true;
             tok_end_tag = true;
-            if (!end_char_record_flag) end_char_record_flag = true;
+            if (!end_char_record_flag && tok_in_char) end_char_record_flag = true;
         } else if (!tok_in_str && src[i] == '<' && !tok_in_tag)
         {
             strt_tag_ind = i + 1;
             tok_in_tag = true;
-            if (!end_char_record_flag) end_char_record_flag = true;
+            if (!end_char_record_flag && tok_in_char != 0) end_char_record_flag = true;
         } else if (!tok_in_str && src[i] == '>' && tok_in_tag && end_tag_ind == 0)
         {
             end_tag_ind = i - 1;
@@ -112,12 +112,12 @@ void tokenize(int argc, char **argv, char *src, uint64_t src_size, char **dst, u
             if (*dst_size + TOKEN_WIDTH > dst_alloc_size)
             {
                 dst_alloc_size += KB;
-                result = realloc(*dst, dst_alloc_size);
+                *dst = realloc(*dst, dst_alloc_size);
             }
             if (*dict_size + 8 > dict_alloc_size)
             {
                 dict_alloc_size += KB;
-                result = realloc(*dict, dict_alloc_size);
+                *dict = realloc(*dict, dict_alloc_size);
             }
 
             insert_p = *dst + *dst_size;
@@ -136,12 +136,12 @@ void tokenize(int argc, char **argv, char *src, uint64_t src_size, char **dst, u
             if (*dst_size + tag_size > dst_alloc_size)
             {
                 dst_alloc_size += KB;
-                result = realloc(*dst, dst_alloc_size);
+                *dst = realloc(*dst, dst_alloc_size);
             }
             if (*dict_size + 8 > dict_alloc_size)
             {
                 dict_alloc_size += KB;
-                result = realloc(*dict, dict_alloc_size);
+                *dict = realloc(*dict, dict_alloc_size);
             }
             insert_p = *dst + *dst_size;
             memcpy(insert_p, tag_value, tag_size);
@@ -193,7 +193,7 @@ void tokenize(int argc, char **argv, char *src, uint64_t src_size, char **dst, u
             (*dict)[(*dict_size)++] = (uintptr_t)insert_p >> BYTE * 7;
             *dst_size += TOKEN_WIDTH;
 
-            if (*dst_size + tag_size > dst_alloc_size)
+            if (*dst_size + char_size > dst_alloc_size)
             {
                 dst_alloc_size += KB;
                 *dst = realloc(*dst, dst_alloc_size);

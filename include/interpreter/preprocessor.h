@@ -23,7 +23,7 @@ typedef enum {
 Encoding preproc_encode = ASCII;
 char *preproc_output_html_filename = NULL;
 
-void preprocess(int argc, char **argv, char *dst, uint64_t *size)
+void preprocess(int argc, char **argv, char **dst, uint64_t *size)
 {
     if (argc == 1);
     else
@@ -173,7 +173,8 @@ void preprocess(int argc, char **argv, char *dst, uint64_t *size)
         free(preproc_output_html_filename);
     }
 
-    dst = file;
+    *dst = malloc(file_size);
+    memcpy(*dst, file, file_size);
     *size = file_size;
 }
 

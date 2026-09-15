@@ -1,3 +1,6 @@
+#ifndef FILE_H
+#define FILE_H
+
 #include "debugger.h"
 #include <windows.h>
 #include <stdio.h>
@@ -47,3 +50,5 @@ void create_write_file(const char *file, void *src, size_t size)
     fwrite(src, 1, size, f);
     fclose(f);
 }
+
+#endif

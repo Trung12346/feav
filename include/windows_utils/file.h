@@ -3,7 +3,7 @@
 #include <stdio.h>
 #include <stdint.h>
 
-void file_read(const char *file, uint64_t *p_size, char *p_buffer)
+void file_read(const char *file, uint64_t *p_size, void *p_buffer)
 {
     FILE *f = fopen(file, "rb");
     if (f == NULL)

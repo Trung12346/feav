@@ -68,7 +68,7 @@ int main(int argc, char **argv)
     if (!is_special_op)
     {
         // run(&app);
-        preprocess(preproc_argc, preproc_argv);
+        preprocess(preproc_argc, preproc_argv, NULL, NULL);
     }
     
     

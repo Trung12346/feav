@@ -16,6 +16,7 @@
 #define HEAP_SIZE 1024 * 128
 #define BIG_HEAP_SIZE 1024 * 1024 * 8
 #define BIG_BIG_HEAP_SIZE 1024 * 1024 * 512
+#define FREE_LIST_ALLOC_COUNT 32
 
 typedef uint64_t qword;
 typedef uint32_t dword;
@@ -132,41 +133,45 @@ typedef struct {
 } HeapChunkHandler64;
 
 typedef struct {
+    uint8_t class;
     uint16_t heap_index;
     uint16_t live_objects;
     void *p_prev;
     void *p_next;
     HeapChunkHandler16 *free_list;
+    uint16_t free_list_alloc_count;
     uint16_t free_list_count;
     uint16_t heap_free_list_cache_h[HEAP_SIZE / 2];
     uint16_t heap_free_list_cache_t[HEAP_SIZE / 2];
-    _Atomic uint8_t heap_status;
 
     uint16_t mem[HEAP_SIZE / 2]; //size: 128KB, page size: 2B, (heap size / minimum allocatable size) = UINT16_MAX
 } Heap;
 typedef struct {
+    uint8_t class;
     uint16_t heap_index;
     uint8_t live_objects;
     void *p_prev;
     void *p_next;
     HeapChunkHandler64 *free_list;
+    uint8_t free_list_alloc_count;
     uint8_t free_list_count;
     uint8_t heap_free_list_cache_h[256];
     uint8_t heap_free_list_cache_t[256];
-    _Atomic uint8_t heap_status;
 
     uint64_t mem[BIG_HEAP_SIZE / 8]; //size: 8MB, page size: 8B, (heap size / minimum allocatable size) < UINT8_MAX
 } BHeap;
 typedef struct {
+    uint8_t class;
     uint16_t heap_index;
     uint8_t live_objects;
     void *p_prev;
     void *p_next;
     HeapChunkHandler64 *free_list;
+    uint8_t free_list_alloc_count;
     uint8_t free_list_count;
     uint8_t heap_free_list_cache_h[256];
     uint8_t heap_free_list_cache_t[256];
-    _Atomic uint8_t heap_status;
+    uint8_t class;
 
     uint64_t mem[BIG_BIG_HEAP_SIZE / 8]; //size: 512MB, page size: 8B, (heap size / minimum allocatable size) < UINT8_MAX
 } BBHeap;

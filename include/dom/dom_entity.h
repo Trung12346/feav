@@ -253,11 +253,15 @@ void dobj_pool_free(DOBJPool *pool, uint64_t pool_glb_index)
     }
 }
 
-#define HEAP_INIT(heap, prev_heap) \
+#define HEAP_INIT(heap, prev_heap, handler_size, HEAP_CLASS) \
 { \
     (heap)->live_objects = 0; \
-    (heap)->free_list_count = 0; \
-    (heap)->free_list = NULL; \
+    (heap)->free_list_count = 1; \
+    (heap)->free_list_alloc_count = FREE_LIST_ALLOC_COUNT; \
+    (heap)->free_list = malloc(sizeof(HeapChunkHandler##handler_size) * FREE_LIST_ALLOC_COUNT); \
+    (heap)->free_list[0] = (HeapChunkHandler##handler_size){0, 0}; \
+    (heap)->class = HEAP_CLASS; \
+    ARR_SIZE(&(heap)->free_list[0].s, UINT64_MAX, (heap)->free_list) \
     if (prev_heap != NULL) \
     { \
         (heap)->p_prev = prev_heap; \
@@ -281,7 +285,7 @@ void heap_init(void **heap, void *prev_heap, uint8_t heap_class)
             Heap *h = (Heap *)*heap;
             Heap *ph = (Heap *)prev_heap;
 
-            HEAP_INIT(h, ph);
+            HEAP_INIT(h, ph, 16, heap_class);
             break;
         case HEAP_CLASS_BIG_HEAP:
             *heap = malloc(sizeof(BHeap));
@@ -289,7 +293,7 @@ void heap_init(void **heap, void *prev_heap, uint8_t heap_class)
             BHeap *bh = (BHeap *)*heap;
             BHeap *bph = (BHeap *)prev_heap;
 
-            HEAP_INIT(bh, bph);
+            HEAP_INIT(bh, bph, 64, heap_class);
             break;
         case HEAP_CLASS_BIG_BIG_HEAP:
             *heap = malloc(sizeof(BBHeap));
@@ -297,7 +301,7 @@ void heap_init(void **heap, void *prev_heap, uint8_t heap_class)
             BBHeap *bbh = (BBHeap *)*heap;
             BBHeap *bbph = (BBHeap *)prev_heap;
 
-            HEAP_INIT(bbh, bbph);
+            HEAP_INIT(bbh, bbph, 64, heap_class);
             break;
         default:
             printf(ERR SYS_DBG_PREFIX" Undefined heap class initialization");
@@ -305,6 +309,70 @@ void heap_init(void **heap, void *prev_heap, uint8_t heap_class)
     }
 }
 
+
+#define HEAP_ALLOC()
+HeapHandler64 heap_alloc(void *heap, size_t size, uint8_t heap_class)
+{
+    HeapHandler64 rtn_obj = {0};
+    switch (heap_class)
+    {
+        case HEAP_CLASS_HEAP:
+            Heap *h = (Heap *)heap;
+
+            if (size > sizeof(h->mem))
+            {
+                printf(ERR SYS_DBG_PREFIX" Heap chunk overflow");
+                exit(1);
+            }
+            size = size / 2;
+            rtn_obj.s = size;
+
+            bool chunk_found = false;
+            for (uint16_t i = 0; i < h->free_list_count; i++)
+            {
+                HeapChunkHandler16 *ch = &h->free_list[i];
+                if (ch->s > size)
+                {
+                    rtn_obj.heap = h;
+                    rtn_obj.a = ch->a;
+                    ch->a += size;
+                    ch->s -= size;
+                    chunk_found = true;
+                    break;
+                } else if (ch->s == size)
+                {
+                    rtn_obj.heap = h;
+                    rtn_obj.a = ch->a;
+                    *ch = h->free_list[--h->free_list_count];
+                    chunk_found = true;
+                    break;
+                }
+            }
+            if (!chunk_found)
+            {
+                if (h->p_next == NULL)
+                {
+                    heap_init(&h->p_next, h, heap_class);
+                }
+                rtn_obj = heap_alloc(h->p_next, size, heap_class);
+                h->live_objects--;
+            }
+            return rtn_obj;
+        case HEAP_CLASS_BIG_HEAP:
+            BHeap *bh = (BHeap *)heap;
+
+
+            break;
+        case HEAP_CLASS_BIG_BIG_HEAP:
+            BBHeap *bbh = (BBHeap *)heap;
+
+
+            break;
+        default:
+            printf(ERR SYS_DBG_PREFIX" Undefined heap class allocation");
+            exit(1);
+    }
+}
 HeapHandler64 heap_free(HeapHandler64 hh, uint8_t heap_class)
 {
     switch (heap_class)
@@ -329,14 +397,16 @@ HeapHandler64 heap_free(HeapHandler64 hh, uint8_t heap_class)
             exit(1);
     }
 }
-HeapHandler64 heap_realloc(HeapHandler64 hh, size_t size, uint8_t heap_class, Worker *w)
+HeapHandler64 heap_realloc(HeapHandler64 hh, size_t size, uint8_t heap_class, BackgroundProcessQueue *queue)
 {
     if (hh.s == size) return hh;
     HeapHandler64 rtn_obj = hh;
+    Worker *w = &queue->worker;
     switch (heap_class)
     {
         case HEAP_CLASS_HEAP:
             Heap *h = (Heap *)hh.heap;
+            size = size / 2; //translate byte to heap native page size
 
             size_t after_lc_addr = hh.a + hh.s;
             uint16_t hash_ind = hash_2_index(hash64(after_lc_addr), UINT16_MAX);
@@ -351,6 +421,15 @@ HeapHandler64 heap_realloc(HeapHandler64 hh, size_t size, uint8_t heap_class, Wo
                 p_ch->a = hh.a + size;
                 p_ch->s += (hh.s - size);
                 rtn_obj.s = size;
+
+                queue_submit_hflo(
+                    (BackgroundProcessQueueSubmitInfo)
+                    {
+                        .class = heap_class,
+                        .p_target = h,
+                        .p_queue = queue
+                    }
+                );
             } else if (is_valid_extend && !outdated_hashmap)
             {
                 //run algirthm to recalculate and expand
@@ -358,8 +437,9 @@ HeapHandler64 heap_realloc(HeapHandler64 hh, size_t size, uint8_t heap_class, Wo
                 if (offset == p_ch->s)
                 {
                     *p_ch = h->free_list[--h->free_list_count];
-                } else {
+                } else { //offset < p_ch->s
                     p_ch->a += offset;
+                    p_ch->s -= offset;
                 }
                 
             } else {
@@ -375,11 +455,22 @@ HeapHandler64 heap_realloc(HeapHandler64 hh, size_t size, uint8_t heap_class, Wo
                         break;
                     } else if (h->free_list[i].s == size)
                     {
-                        h->free_list_count--;
+                        h->free_list[i] = h->free_list[--h->free_list_count];
                         chunk_found = true;
                         break;
                     }
                 }
+                if (!chunk_found)
+                {
+                    if (h->p_next == NULL)
+                    {
+                        heap_init(&h->p_next, h, heap_class);
+                        //alloc
+
+                    }
+                    h->live_objects--;
+                }
+                //free old chunk
             }
             
             break;

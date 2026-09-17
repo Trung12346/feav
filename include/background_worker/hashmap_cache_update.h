@@ -165,7 +165,7 @@ DWORD WINAPI heap_free_list_organizer(void *arg)
 
     return 0;
 }
-void request_hflo(BackgroundProcessQueueSubmitInfo info)
+void queue_submit_hflo(BackgroundProcessQueueSubmitInfo info)
 {
     Worker *w = &info.p_queue->worker;
     BackgroundProcessQueue *queue = info.p_queue;

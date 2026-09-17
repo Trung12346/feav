@@ -6,9 +6,9 @@
 #define QWORD_SCAN_IS_FREE_MASK 0b0000000100000001000000010000000100000001000000010000000100000001ULL
 #define DWORD_SCAN_IS_FREE_MASK 0b00000001000000010000000100000001UL
 #define HALFWORD_SCAN_IS_FREE_MASK 0b00000001U
-#define QWORD_MAX UINT64_MAX
-#define DWORD_MAX UINT32_MAX
-#define HALFWORD_MAX UINT8_MAX
+#define QWORD_WIDTH 64
+#define DWORD_WIDTH 32
+#define HALFWORD_WIDTH 8
 #define POOL_SIZE 1024 * 64
 typedef enum {
     CUSTOM,
@@ -83,22 +83,22 @@ typedef struct {
 uint16_t available_pool(DOBJPool *pool, DOBJ obj, bool *free_found)
 {
     *free_found = false;
-    for (uint32_t i = 0; i < POOL_SIZE / QWORD_MAX; i++)
+    for (uint32_t i = 0; i < POOL_SIZE / QWORD_WIDTH; i++)
     {
         uint64_t buffer;
         uint32_t sbuffer;
         uint8_t ssbuffer;
-        memcpy(&buffer, &pool->status_flags + i * 8, 8);
-        if (buffer & !QWORD_SCAN_IS_FREE_MASK)
+        memcpy(&buffer, pool->status_flags + i * 8, 8);
+        if (buffer & QWORD_SCAN_IS_FREE_MASK)
         {
-            for (uint8_t si = 0; si < QWORD_MAX / DWORD_MAX; i++)
+            for (uint8_t si = 0; si < QWORD_WIDTH / DWORD_WIDTH; si++)
             {
-                memcpy(&sbuffer, &pool->status_flags + i * 8 + si * 4, 4);
-                if (sbuffer & !DWORD_SCAN_IS_FREE_MASK)
+                memcpy(&sbuffer, pool->status_flags + i * 8 + si * 4, 4);
+                if (sbuffer & DWORD_SCAN_IS_FREE_MASK)
                 {
-                    for (uint8_t ssi; ssi < DWORD_MAX / HALFWORD_MAX; i++)
+                    for (uint8_t ssi = 0; ssi < DWORD_WIDTH / HALFWORD_WIDTH; ssi++)
                     {
-                        memcpy(&ssbuffer, &pool->status_flags + i * 8 + si * 4 + ssi, 1);
+                        memcpy(&ssbuffer, pool->status_flags + i * 8 + si * 4 + ssi, 1);
                         if (ssbuffer & HALFWORD_SCAN_IS_FREE_MASK)
                         {
                             *free_found = true;
@@ -106,7 +106,6 @@ uint16_t available_pool(DOBJPool *pool, DOBJ obj, bool *free_found)
                         }
                     }
                 }
-            
             }
         }
     }

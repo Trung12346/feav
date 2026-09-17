@@ -153,6 +153,8 @@ void tokenize(int argc, char **argv, char *src, uint64_t src_size, char **dst, u
             strt_tag_ind = 0;
             tok_end_tag = false;
             insert_p = NULL;
+            free(tag_value);
+            tag_value = NULL;
         } else if (!tok_in_tag && !tok_in_char)
         {
             tok_in_char = true;
@@ -219,6 +221,8 @@ void tokenize(int argc, char **argv, char *src, uint64_t src_size, char **dst, u
             char_size = 0;
             end_char_ind = 0;
             insert_p = NULL;
+            free(char_value);
+            char_value = NULL;
         }
     }
 

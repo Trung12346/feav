@@ -310,7 +310,41 @@ void heap_init(void **heap, void *prev_heap, uint8_t heap_class)
 }
 
 
-#define HEAP_ALLOC()
+#define HEAP_ALLOC() \
+{ \
+    size = size / 2; \
+    rtn_obj.s = size; \
+    bool chunk_found = false; \
+    for (uint16_t i = 0; i < h->free_list_count; i++) \
+    { \
+        HeapChunkHandler16 *ch = &h->free_list[i]; \
+        if (ch->s > size) \
+        { \
+            rtn_obj.heap = h; \
+            rtn_obj.a = ch->a; \
+            ch->a += size; \
+            ch->s -= size; \
+            chunk_found = true; \
+            break; \
+        } else if (ch->s == size) \
+        { \
+            rtn_obj.heap = h; \
+            rtn_obj.a = ch->a; \
+            *ch = h->free_list[--h->free_list_count]; \
+            chunk_found = true; \
+            break; \
+        } \
+    } \
+    if (!chunk_found) \
+    { \
+        if (h->p_next == NULL) \
+        { \
+            heap_init(&h->p_next, h, heap_class); \
+        } \
+        rtn_obj = heap_alloc(h->p_next, size, heap_class); \
+        h->live_objects--; \
+    } \
+}
 HeapHandler64 heap_alloc(void *heap, size_t size, uint8_t heap_class)
 {
     HeapHandler64 rtn_obj = {0};

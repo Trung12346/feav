@@ -1,3 +1,6 @@
+#ifndef DOM_ENTITY_H
+#define DOM_ENTITY_H
+
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
@@ -26,14 +29,66 @@ typedef enum {
     HTML,
     HEAD,
     BODY,
-    DIV,
+    TITLE,
+    LINK,
+    STYLE,
+    SCRIPT,
     META,
+    DIV,
+    P,
+    BR,
+    HR,
     H1,
     H2,
     H3,
     H4,
     H5,
-    H6
+    H6,
+    A,
+    IMG,
+    UL,
+    OL,
+    LI,
+    TABLE,
+    THEAD,
+    TBODY,
+    TFOOT,
+    TR,
+    TH,
+    TD,
+    FORM,
+    DINPUT,
+    TEXTAREA,
+    BUTTON,
+    SELECT,
+    OPTION,
+    LABEL,
+    HEADER,
+    NAV,
+    MAIN,
+    SECTION,
+    ARTICLE,
+    ASIDE,
+    FOOTER,
+    VIDEO,
+    AUDIO,
+    SOURCE,
+    CANVAS,
+    SVG,
+    DETAILS,
+    SUMMARY,
+    IFRAME,
+    PRE,
+    CODE,
+    BLOCKQUOTE,
+    STRONG,
+    EM,
+    B,
+    I,
+    U,
+    SMALL,
+    SUB,
+    SUP
 } TagIdentifier;
 
 typedef struct {
@@ -55,8 +110,8 @@ typedef struct {
 typedef struct {
     uint16_t pool_index;
     uint16_t live_objects;
-    uintptr_t p_prev;
-    uintptr_t p_next;
+    void *p_prev;
+    void *p_next;
     uint8_t status_flags[POOL_ELEMENT_COUNT];
 
     char tag_names[POOL_ELEMENT_COUNT][32];
@@ -230,3 +285,5 @@ void pool_free(DOBJPool *pool, uint64_t pool_glb_index)
 //caching freed items in small/big cache.
 //small cache doesnt run a definite algorithm, each freed index is placed in a particular pattern relative to the previously placed indices
 //big cache needs a seperate CPU thread to occasionally run sorting algorithm, large overhead and slow, needed cross thread synchronization and avoid memory failure
+
+#endif

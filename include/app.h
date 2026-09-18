@@ -4,6 +4,7 @@
 #include "GLFW/glfw3.h"
 #include "vk_process.h"
 #include "CGLM/types.h"
+#include "dom/dom_entity.h"
 
 #define VIEW_PORT_WIDTH 1000
 #define VIEW_PORT_HEIGHT 760

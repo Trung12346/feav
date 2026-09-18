@@ -10,6 +10,7 @@
 #include "main.h"
 #include "interpreter/preprocessor.h"
 #include "interpreter/tokenizer.h"
+#include "interpreter/parser.h"
 
 #ifndef ARG_VAL
 #define ARG_VAL char*value=argv[i+1];if(strncmp(value,"--", 2) == 0){printf(ERR SYS_DBG_PREFIX" Invalid argument for %s",argv[i]);exit(1);}
@@ -21,7 +22,15 @@ char *preproc_argv[2];
 uint8_t tok_argc = 0;
 char *tok_argv[2];
 
+void print_array(const uint8_t *array, size_t count)
+{
+    for (size_t i = 0; i < count; i++)
+    {
+        printf("0x%02X ", array[i]);
+    }
 
+    printf("\n");
+}
 
 int main(int argc, char **argv)
 {
@@ -90,6 +99,8 @@ int main(int argc, char **argv)
         uint8_t *dict;
         uint64_t dict_size;
         tokenize(tok_argc, tok_argv, preproced, size, &dst, &dst_size, &dict, &dict_size);
+        
+        parse(dst, dict, dict_size, &app);
     }
     
     

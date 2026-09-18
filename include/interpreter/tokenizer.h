@@ -13,6 +13,9 @@
 #define BYTE 8
 #define KB 1024
 #define TOKEN_WIDTH 1
+#define DICT_INDEX_WIDTH 8
+#define DICT_TAG_SIZE_WIDTH 1
+#define DICT_CHAR_SIZE_WIDTH 8
 
 char *tok_output_bin_filename = NULL;
 bool tok_in_tag = false;
@@ -247,6 +250,17 @@ void tokenize(int argc, char **argv, char *src, uint64_t src_size, char **dst, u
             char_value = NULL;
         }
     }
+    
+    if (*dst_size + TOKEN_WIDTH > dst_alloc_size)
+    {
+        dst_alloc_size += KB;
+        *dst = realloc(*dst, dst_alloc_size);
+    }
+    if (*dict_size + 8 > dict_alloc_size)
+    {
+        dict_alloc_size += KB;
+        *dict = realloc(*dict, dict_alloc_size);
+    }
 
     insert_p = *dst + *dst_size;
     insert_i = *dst_size;
@@ -262,16 +276,7 @@ void tokenize(int argc, char **argv, char *src, uint64_t src_size, char **dst, u
     (*dict)[(*dict_size)++] = insert_i >> BYTE * 7;
     *dst_size += TOKEN_WIDTH;
 
-    if (*dst_size + TOKEN_WIDTH > dst_alloc_size)
-    {
-        dst_alloc_size += KB;
-        *dst = realloc(*dst, dst_alloc_size);
-    }
-    if (*dict_size + 8 > dict_alloc_size)
-    {
-        dict_alloc_size += KB;
-        *dict = realloc(*dict, dict_alloc_size);
-    }
+    
     if (tok_output_bin_filename != NULL)
     {
         create_write_file(tok_output_bin_filename, *dst, *dst_size);
@@ -285,4 +290,5 @@ void tokenize(int argc, char **argv, char *src, uint64_t src_size, char **dst, u
     tok_end_tag = false;
     tok_in_str = false;
 }
+
 #endif

@@ -13,7 +13,6 @@
 #define BYTE 8
 #define KB 1024
 #define TOKEN_WIDTH 1
-#define DICTIONARY_WIDTH 3
 
 char *tok_output_bin_filename = NULL;
 bool tok_in_tag = false;
@@ -22,11 +21,11 @@ bool tok_end_tag = false;
 bool tok_in_str = false;
 
 typedef enum {
-    DOCTYPE,
-    START_TAG,
-    END_TAG,
-    CHARACTER,
-    TOK_EOF,
+    DOCTYPE = 0x01U,
+    START_TAG = 0x02U,
+    END_TAG = 0x03U,
+    CHARACTER = 0x04U,
+    TOK_EOF = 0x05U,
 } Token;
 
 void tokenize(int argc, char **argv, char *src, uint64_t src_size, char **dst, uint64_t *dst_size, uint8_t **dict, uint64_t *dict_size)
@@ -44,14 +43,32 @@ void tokenize(int argc, char **argv, char *src, uint64_t src_size, char **dst, u
         }
     }
 
+    //DICTIONARY LAYOUT
     /*
       1   2   3   4   5   6   7   8   9   10  11  12  13  14  15  16   <-- byte
     | b | b | b | b | b | b | b | b | b | b | b | b | b | b | b | b |
       _____________________________   _____________________________
                     |                                |
-              token pointer                    character size
+                CHAR token                    character size
+    */
+   /*
+      1   2   3   4   5   6   7   8   9   <-- byte
+    | b | b | b | b | b | b | b | b | b |
+      _____________________________   _
+                    |                 |
+               tags token          tag size
+    */
+   /*
+      1   2   3   4   5   6   7   8   <-- byte
+    | b | b | b | b | b | b | b | b |
+      _____________________________
+                    |
+                EOF token
     */
     
+   //note for my stupid ass rotten brain in case i ever forget again:
+   //TOKEN WIDTH IS A BYTE SO YOU ONLY NEED TOKEN INDEX, OFFSET BY 1 BYTE AND YOU ARE AT BEGINNING OF YOUR VALUE INDEX
+
     uint64_t dict_alloc_size = KB;
     *dict = malloc(dict_alloc_size);
     *dict_size = 0;
@@ -71,6 +88,7 @@ void tokenize(int argc, char **argv, char *src, uint64_t src_size, char **dst, u
     char *char_value;
     bool end_char_record_flag = false;
     char* insert_p;
+    uint64_t insert_i;
 
     for (uint64_t i = 0; i < src_size; i++)
     {
@@ -121,16 +139,17 @@ void tokenize(int argc, char **argv, char *src, uint64_t src_size, char **dst, u
             }
 
             insert_p = *dst + *dst_size;
+            insert_i = *dst_size;
             uint8_t token = tok_end_tag ? END_TAG : START_TAG;
             memcpy(insert_p, &token, TOKEN_WIDTH);
-            (*dict)[(*dict_size)++] = (uintptr_t)insert_p;
-            (*dict)[(*dict_size)++] = (uintptr_t)insert_p >> BYTE;
-            (*dict)[(*dict_size)++] = (uintptr_t)insert_p >> BYTE * 2;
-            (*dict)[(*dict_size)++] = (uintptr_t)insert_p >> BYTE * 3;
-            (*dict)[(*dict_size)++] = (uintptr_t)insert_p >> BYTE * 4;
-            (*dict)[(*dict_size)++] = (uintptr_t)insert_p >> BYTE * 5;
-            (*dict)[(*dict_size)++] = (uintptr_t)insert_p >> BYTE * 6;
-            (*dict)[(*dict_size)++] = (uintptr_t)insert_p >> BYTE * 7;
+            (*dict)[(*dict_size)++] = insert_i;
+            (*dict)[(*dict_size)++] = insert_i >> BYTE;
+            (*dict)[(*dict_size)++] = insert_i >> BYTE * 2;
+            (*dict)[(*dict_size)++] = insert_i >> BYTE * 3;
+            (*dict)[(*dict_size)++] = insert_i >> BYTE * 4;
+            (*dict)[(*dict_size)++] = insert_i >> BYTE * 5;
+            (*dict)[(*dict_size)++] = insert_i >> BYTE * 6;
+            (*dict)[(*dict_size)++] = insert_i >> BYTE * 7;
             *dst_size += TOKEN_WIDTH;
 
             if (*dst_size + tag_size > dst_alloc_size)
@@ -153,6 +172,7 @@ void tokenize(int argc, char **argv, char *src, uint64_t src_size, char **dst, u
             strt_tag_ind = 0;
             tok_end_tag = false;
             insert_p = NULL;
+            insert_i = 0;
             free(tag_value);
             tag_value = NULL;
         } else if (!tok_in_tag && !tok_in_char)
@@ -183,16 +203,17 @@ void tokenize(int argc, char **argv, char *src, uint64_t src_size, char **dst, u
                 *dict = realloc(*dict, dict_alloc_size);
             }
             insert_p = *dst + *dst_size;
+            insert_i = *dst_size;
             uint8_t token = CHARACTER;
             memcpy(insert_p, &token, TOKEN_WIDTH);
-            (*dict)[(*dict_size)++] = (uintptr_t)insert_p;
-            (*dict)[(*dict_size)++] = (uintptr_t)insert_p >> BYTE;
-            (*dict)[(*dict_size)++] = (uintptr_t)insert_p >> BYTE * 2;
-            (*dict)[(*dict_size)++] = (uintptr_t)insert_p >> BYTE * 3;
-            (*dict)[(*dict_size)++] = (uintptr_t)insert_p >> BYTE * 4;
-            (*dict)[(*dict_size)++] = (uintptr_t)insert_p >> BYTE * 5;
-            (*dict)[(*dict_size)++] = (uintptr_t)insert_p >> BYTE * 6;
-            (*dict)[(*dict_size)++] = (uintptr_t)insert_p >> BYTE * 7;
+            (*dict)[(*dict_size)++] = insert_i;
+            (*dict)[(*dict_size)++] = insert_i >> BYTE;
+            (*dict)[(*dict_size)++] = insert_i >> BYTE * 2;
+            (*dict)[(*dict_size)++] = insert_i >> BYTE * 3;
+            (*dict)[(*dict_size)++] = insert_i >> BYTE * 4;
+            (*dict)[(*dict_size)++] = insert_i >> BYTE * 5;
+            (*dict)[(*dict_size)++] = insert_i >> BYTE * 6;
+            (*dict)[(*dict_size)++] = insert_i >> BYTE * 7;
             *dst_size += TOKEN_WIDTH;
 
             if (*dst_size + char_size > dst_alloc_size)
@@ -221,11 +242,36 @@ void tokenize(int argc, char **argv, char *src, uint64_t src_size, char **dst, u
             char_size = 0;
             end_char_ind = 0;
             insert_p = NULL;
+            insert_i = 0;
             free(char_value);
             char_value = NULL;
         }
     }
 
+    insert_p = *dst + *dst_size;
+    insert_i = *dst_size;
+    uint8_t token = TOK_EOF;
+    memcpy(insert_p, &token, TOKEN_WIDTH);
+    (*dict)[(*dict_size)++] = insert_i;
+    (*dict)[(*dict_size)++] = insert_i >> BYTE;
+    (*dict)[(*dict_size)++] = insert_i >> BYTE * 2;
+    (*dict)[(*dict_size)++] = insert_i >> BYTE * 3;
+    (*dict)[(*dict_size)++] = insert_i >> BYTE * 4;
+    (*dict)[(*dict_size)++] = insert_i >> BYTE * 5;
+    (*dict)[(*dict_size)++] = insert_i >> BYTE * 6;
+    (*dict)[(*dict_size)++] = insert_i >> BYTE * 7;
+    *dst_size += TOKEN_WIDTH;
+
+    if (*dst_size + TOKEN_WIDTH > dst_alloc_size)
+    {
+        dst_alloc_size += KB;
+        *dst = realloc(*dst, dst_alloc_size);
+    }
+    if (*dict_size + 8 > dict_alloc_size)
+    {
+        dict_alloc_size += KB;
+        *dict = realloc(*dict, dict_alloc_size);
+    }
     if (tok_output_bin_filename != NULL)
     {
         create_write_file(tok_output_bin_filename, *dst, *dst_size);

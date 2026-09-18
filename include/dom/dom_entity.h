@@ -4,13 +4,13 @@
 #include "main.h"
 #include "debugger.h"
 
-#define QWORD_SCAN_IS_FREE_MASK 0b0000000100000001000000010000000100000001000000010000000100000001ULL
-#define DWORD_SCAN_IS_FREE_MASK 0b00000001000000010000000100000001UL
-#define HALFWORD_SCAN_IS_FREE_MASK 0b00000001U
+#define QWORD_SCAN_IS_OCCUPIED_MASK 0b0000000100000001000000010000000100000001000000010000000100000001ULL
+#define DWORD_SCAN_IS_OCCUPIED_MASK 0b00000001000000010000000100000001UL
+#define HALFWORD_SCAN_IS_OCCUPIED_MASK 0b00000001U
 #define QWORD_WIDTH 64
 #define DWORD_WIDTH 32
 #define HALFWORD_WIDTH 8
-#define POOL_STATUS_IS_FREE_BIT 0b00000001U
+#define POOL_STATUS_IS_OCCUPIED_BIT 0b00000001U
 #define POOL_ELEMENT_COUNT 1024
 #define POOL_STATUS_FLAGS_SIZE POOL_ELEMENT_COUNT * HALFWORD_WIDTH
 #define ARENA_SIZE 1024 * 64
@@ -100,8 +100,6 @@ void pool_init(DOBJPool **pool, DOBJPool *prev_pool)
 {
     *pool = malloc(sizeof(DOBJPool));
 
-    (*pool)->pool_index = prev_pool->pool_index + 1;
-
     (*pool)->live_objects = 0;
 
     if (prev_pool != NULL)
@@ -109,26 +107,12 @@ void pool_init(DOBJPool **pool, DOBJPool *prev_pool)
         (*pool)->p_next = NULL;
         (*pool)->p_prev = prev_pool;
         prev_pool->p_next = *pool;
+        (*pool)->pool_index = prev_pool->pool_index + 1;
     } else
     {
         (*pool)->p_next = NULL;
         (*pool)->p_prev = NULL;
-    }
-    
-    for (uint32_t i = 0; i < POOL_ELEMENT_COUNT / QWORD_WIDTH; i++)
-    {
-        qword free_mask = (qword)
-        (
-            POOL_STATUS_IS_FREE_BIT |
-            POOL_STATUS_IS_FREE_BIT << QWORD_WIDTH |
-            POOL_STATUS_IS_FREE_BIT << QWORD_WIDTH * 2 |
-            POOL_STATUS_IS_FREE_BIT << QWORD_WIDTH * 3 |
-            POOL_STATUS_IS_FREE_BIT << QWORD_WIDTH * 4 |
-            POOL_STATUS_IS_FREE_BIT << QWORD_WIDTH * 5 |
-            POOL_STATUS_IS_FREE_BIT << QWORD_WIDTH * 6 |
-            POOL_STATUS_IS_FREE_BIT << QWORD_WIDTH * 7
-        );
-        memcpy((*pool)->status_flags + i * QWORD_WIDTH, &free_mask, sizeof(qword));
+        (*pool)->pool_index = 0;
     }
 }
 
@@ -177,17 +161,17 @@ uint16_t available_pool_region_search(DOBJPool *pool, bool *free_found)
         uint32_t sbuffer;
         uint8_t ssbuffer;
         memcpy(&buffer, pool->status_flags + i * 8, 8);
-        if (buffer & QWORD_SCAN_IS_FREE_MASK)
+        if (!(buffer & QWORD_SCAN_IS_OCCUPIED_MASK))
         {
             for (uint8_t si = 0; si < QWORD_WIDTH / DWORD_WIDTH; si++)
             {
                 memcpy(&sbuffer, pool->status_flags + i * 8 + si * 4, 4);
-                if (sbuffer & DWORD_SCAN_IS_FREE_MASK)
+                if (!(sbuffer & DWORD_SCAN_IS_OCCUPIED_MASK))
                 {
                     for (uint8_t ssi = 0; ssi < DWORD_WIDTH / HALFWORD_WIDTH; ssi++)
                     {
                         memcpy(&ssbuffer, pool->status_flags + i * 8 + si * 4 + ssi, 1);
-                        if (ssbuffer & HALFWORD_SCAN_IS_FREE_MASK)
+                        if (!(ssbuffer & HALFWORD_SCAN_IS_OCCUPIED_MASK))
                         {
                             *free_found = true;
                             return i * 8 + si * 4 + ssi;
@@ -213,8 +197,8 @@ static uint64_t dobj_pool_alloc(DOBJ obj, DOBJPool *pool)
     {
         return dobj_pool_alloc(obj, pool->p_next);
     }
-
-    working_pool->status_flags[working_index] &= ~POOL_STATUS_IS_FREE_BIT;
+    working_pool->live_objects++;
+    working_pool->status_flags[working_index] |= POOL_STATUS_IS_OCCUPIED_BIT;
     strcpy(working_pool->tag_names[working_index], obj.tag_name);
     working_pool->tag_ids[working_index] = obj.tag_id;
     working_pool->p_arena_attrs[working_index] = obj.p_arena_attr;
@@ -231,5 +215,18 @@ void pool_free(DOBJPool *pool, uint64_t pool_glb_index)
 {
     DOBJHandler obj = pool_search(pool, pool_glb_index);
 
-    obj.pool->status_flags[obj.item_index] |= POOL_STATUS_IS_FREE_BIT;
+    if (obj.pool->status_flags[obj.item_index] & POOL_STATUS_IS_OCCUPIED_BIT)
+    {
+        obj.pool->status_flags[obj.item_index] &= ~POOL_STATUS_IS_OCCUPIED_BIT;
+        pool->live_objects--;
+        if ((pool->live_objects < POOL_ELEMENT_COUNT / 2) && pool->p_next != NULL && ((DOBJPool *)pool->p_next)->live_objects == 0)
+        {
+            free((DOBJPool *)pool->p_next);
+            pool->p_next = NULL;
+        }
+    }
 }
+
+//caching freed items in small/big cache.
+//small cache doesnt run a definite algorithm, each freed index is placed in a particular pattern relative to the previously placed indices
+//big cache needs a seperate CPU thread to occasionally run sorting algorithm, large overhead and slow, needed cross thread synchronization and avoid memory failure

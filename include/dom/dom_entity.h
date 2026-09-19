@@ -25,70 +25,70 @@ typedef uint16_t word;
 typedef uint8_t hword;
 
 typedef enum {
-    CUSTOM,
-    HTML,
-    HEAD,
-    BODY,
-    TITLE,
-    LINK,
-    STYLE,
-    SCRIPT,
-    META,
-    DIV,
-    P,
-    BR,
-    HR,
-    H1,
-    H2,
-    H3,
-    H4,
-    H5,
-    H6,
-    A,
-    IMG,
-    UL,
-    OL,
-    LI,
-    TABLE,
-    THEAD,
-    TBODY,
-    TFOOT,
-    TR,
-    TH,
-    TD,
-    FORM,
-    DINPUT,
-    TEXTAREA,
-    BUTTON,
-    SELECT,
-    OPTION,
-    LABEL,
-    HEADER,
-    NAV,
-    MAIN,
-    SECTION,
-    ARTICLE,
-    ASIDE,
-    FOOTER,
-    VIDEO,
-    AUDIO,
-    SOURCE,
-    CANVAS,
-    SVG,
-    DETAILS,
-    SUMMARY,
-    IFRAME,
-    PRE,
-    CODE,
-    BLOCKQUOTE,
-    STRONG,
-    EM,
-    B,
-    I,
-    U,
-    SMALL,
-    SUB,
-    SUP
+    CUSTOM      = 0,//
+    HTML        = 1,//
+    HEAD        = 2,//
+    BODY        = 3,
+    TITLE       = 4,//
+    LINK        = 5,
+    STYLE       = 6,
+    SCRIPT      = 7,
+    META        = 8,
+    DIV         = 9,//
+    P           = 10,//
+    BR          = 11,
+    HR          = 12,
+    H1          = 13,//
+    H2          = 14,//
+    H3          = 15,//
+    H4          = 16,//
+    H5          = 17,//
+    H6          = 18,//
+    A           = 19,//
+    IMG         = 20,//
+    UL          = 21,//
+    OL          = 22,//
+    LI          = 23,//
+    TABLE       = 24,//
+    THEAD       = 25,//
+    TBODY       = 26,//
+    TFOOT       = 27,//
+    TR          = 28,//
+    TH          = 29,//
+    TD          = 30,//
+    FORM        = 31,
+    DINPUT      = 32,//
+    TEXTAREA    = 33,//
+    BUTTON      = 34,
+    SELECT      = 35,
+    OPTION      = 36,
+    LABEL       = 37,//
+    HEADER      = 38,//
+    NAV         = 39,//
+    MAIN        = 40,
+    SECTION     = 41,
+    ARTICLE     = 42,
+    ASIDE       = 43,
+    FOOTER      = 44,
+    VIDEO       = 45,
+    AUDIO       = 46,
+    SOURCE      = 47,
+    CANVAS      = 48,
+    SVG         = 49,//
+    DETAILS     = 50,
+    SUMMARY     = 51,
+    IFRAME      = 52,
+    PRE         = 53,
+    CODE        = 54,
+    BLOCKQUOTE  = 55,
+    STRONG      = 56,
+    EM          = 57,
+    B           = 58,
+    I           = 59,
+    U           = 60,
+    SMALL       = 61,
+    SUB         = 62,//
+    SUP         = 63//
 } TagIdentifier;
 
 typedef struct {
@@ -150,6 +150,107 @@ typedef struct {
 
     uint64_t mem[BIG_ARENA_SIZE / 8]; //size: 64MB, page size: 8B
 } BigArena;
+
+uint8_t tag_name_resolver(char *name)
+{
+    char name0 = name[0];
+    uint8_t len = strlen(name);
+    switch (len)
+    {
+        case 3:
+            if (strcmp(name, "div") == 0) return 9;
+            else if (strcmp(name, "nav") == 0) return 39;
+            else if (strcmp(name, "img") == 0) return 20;
+            else if (strcmp(name, "svg") == 0) return 49;
+            else if (strcmp(name, "sup") == 0) return 63;
+            else if (strcmp(name, "sub") == 0) return 62;
+            else if (strcmp(name, "pre") == 0) return 53;
+            break;
+        case 1:
+            switch (name0)
+            {
+                case 'p': return 10;
+                case 'a': return 19;
+                case 'b': return 58;
+                case 'i': return 59;
+                case 'u': return 60;
+            }
+            break;
+        case 2:
+            if (strcmp(name, "li") == 0) return 23;
+            else if (strcmp(name, "td") == 0) return 30;
+            else if (strcmp(name, "br") == 0) return 11;
+            else if (strcmp(name, "tr") == 0) return 28;
+            else if (strcmp(name, "th") == 0) return 29;
+            else if (strcmp(name, "ul") == 0) return 21;
+            else if (strcmp(name, "ol") == 0) return 22;
+            else if (strcmp(name, "em") == 0) return 57;
+            else if (strcmp(name, "hr") == 0) return 12;
+            break;
+        case 4:
+            if (strcmp(name, "body") == 0) return 3;
+            else if (strcmp(name, "link") == 0) return 5;
+            else if (strcmp(name, "meta") == 0) return 8;
+            else if (strcmp(name, "form") == 0) return 31;
+            else if (strcmp(name, "main") == 0) return 40;
+            else if (strcmp(name, "code") == 0) return 54;
+            break;
+        case 5:
+            if (strcmp(name, "input") == 0) return 32;
+            else if (strcmp(name, "label") == 0) return 37;
+            else if (strcmp(name, "aside") == 0) return 43;
+            else if (strcmp(name, "style") == 0) return 6;
+            else if (strcmp(name, "video") == 0) return 45;
+            else if (strcmp(name, "audio") == 0) return 46;
+            else if (strcmp(name, "small") == 0) return 61;
+            break;
+        case 6:
+            if (strcmp(name, "script") == 0) return 7;
+            else if (strcmp(name, "button") == 0) return 34;
+            else if (strcmp(name, "select") == 0) return 35;
+            else if (strcmp(name, "option") == 0) return 36;
+            else if (strcmp(name, "footer") == 0) return 44;
+            else if (strcmp(name, "strong") == 0) return 56;
+            else if (strcmp(name, "source") == 0) return 47;
+            else if (strcmp(name, "canvas") == 0) return 48;
+            break;
+        case 7:
+            if (strcmp(name, "section") == 0) return 41;
+            else if (strcmp(name, "article") == 0) return 42;
+            break;
+    }
+    switch (name0) {
+        case 'h':
+            if (len == 2) {
+                switch (name[1])
+                {
+                    case '1': return 13U;
+                    case '2': return 14U;
+                    case '3': return 15U;
+                    case '4': return 16U;
+                    case '5': return 17U;
+                    case '6': return 18U;
+                }
+            }
+            if (strcmp(name, "header") == 0) return 38;
+            else if (strcmp(name, "head") == 0) return 2;
+            else if (strcmp(name, "html") == 0) return 1;
+            break;
+        case 't':
+            if (strcmp(name, "tbody") == 0) return 26;
+            else if (strcmp(name, "thead") == 0) return 25;
+            else if (strcmp(name, "table") == 0) return 24;
+            else if (strcmp(name, "textarea") == 0) return 33;
+            else if (strcmp(name, "title") == 0) return 4;
+            else if (strcmp(name, "tfoot") == 0) return 27;
+            break;
+    }
+    if (strcmp(name, "blockquote") == 0) return 55;
+    else if (strcmp(name, "details") == 0) return 50;
+    else if (strcmp(name, "iframe") == 0) return 52;
+    else if (strcmp(name, "summary") == 0) return 51;
+    return 0;
+}
 
 void pool_init(DOBJPool **pool, DOBJPool *prev_pool)
 {

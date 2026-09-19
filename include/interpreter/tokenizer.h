@@ -102,7 +102,7 @@ void tokenize(int argc, char **argv, char *src, uint64_t src_size, char **dst, u
 
         if (!tok_in_str && i + 1 < src_size && src[i] == '<' && src[i + 1] == '/')
         {
-            strt_tag_ind = i + 1;
+            strt_tag_ind = i + 2;
             tok_in_tag = true;
             tok_end_tag = true;
             if (!end_char_record_flag && tok_in_char) end_char_record_flag = true;
@@ -116,18 +116,18 @@ void tokenize(int argc, char **argv, char *src, uint64_t src_size, char **dst, u
             end_tag_ind = i - 1;
             tok_in_tag = false;
             
-            tag_size = end_tag_ind - strt_tag_ind;
+            tag_size = end_tag_ind - strt_tag_ind + 1;
 
-            if (!tok_end_tag)
-            {
-                tag_size++;
-            } else {
-                strt_tag_ind++;
-            }
+            // if (!tok_end_tag)
+            // {
+            //     tag_size++;
+            // } else {
+            //     strt_tag_ind++;
+            // }
             
-            tag_value = malloc(tag_size + 1);
-            tag_value[tag_size] = '\0';
-            memcpy(tag_value, src + strt_tag_ind, tag_size);
+            tag_value = malloc(++tag_size);
+            tag_value[tag_size - 1] = '\0';
+            memcpy(tag_value, src + strt_tag_ind, tag_size - 1);
             printf("tag: %s\n", tag_value);
 
             if (*dst_size + TOKEN_WIDTH > dst_alloc_size)
@@ -143,7 +143,15 @@ void tokenize(int argc, char **argv, char *src, uint64_t src_size, char **dst, u
 
             insert_p = *dst + *dst_size;
             insert_i = *dst_size;
-            uint8_t token = tok_end_tag ? END_TAG : START_TAG;
+            
+            uint8_t token;
+            if (strstr(tag_value, "!DOCTYPE"))
+            {
+                token = DOCTYPE;
+            } else {
+                token = tok_end_tag ? END_TAG : START_TAG;
+            }
+
             memcpy(insert_p, &token, TOKEN_WIDTH);
             (*dict)[(*dict_size)++] = insert_i;
             (*dict)[(*dict_size)++] = insert_i >> BYTE;
@@ -190,9 +198,9 @@ void tokenize(int argc, char **argv, char *src, uint64_t src_size, char **dst, u
             tok_in_char = false;
             end_char_ind = i - 1;
             char_size = end_char_ind - strt_char_ind + 1;
-            char_value = malloc(char_size + 1);
-            char_value[char_size] = '\0';
-            memcpy(char_value, src + strt_char_ind, char_size);
+            char_value = malloc(++char_size);
+            char_value[char_size - 1] = '\0';
+            memcpy(char_value, src + strt_char_ind, char_size - 1);
             printf("char: %s\n", char_value);
 
             if (*dst_size + TOKEN_WIDTH > dst_alloc_size)

@@ -122,7 +122,7 @@ DEFINE_MERGE_SORT(64, HeapChunkHandler64)
 
 #define HASHMAP_REBUILD(SIZE, HEAP) \
 { \
-    merge_sort_snapshot_##SIZE(HEAP->free_list, (uint64_t *)&HEAP->free_list_count, &HEAP->free_list_lock, &HEAP->free_list_version); \
+    merge_sort_snapshot_##SIZE(&HEAP->free_list, (uint64_t *)&HEAP->free_list_count, &HEAP->free_list_lock, &HEAP->free_list_version); \
     for (uint##SIZE##_t i = 0; i < HEAP->free_list_count; i++) \
     { \
         uint##SIZE##_t h_hash_ind = hash_2_index(hash64(HEAP->free_list[i].a), UINT8_MAX); \

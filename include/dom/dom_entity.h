@@ -324,6 +324,9 @@ void heap_init(void **heap, void *prev_heap, uint8_t heap_class)
 
 #define HEAP_ALLOC(HEAP, CH_TYPE) \
 { \
+    uint8_t mem_page_mask = sizeof(HEAP->mem[0]) - 1; \
+    size = (size + mem_page_mask) & ~(mem_page_mask); \
+    rtn_obj.s = size; \
     if (size > sizeof(HEAP->mem)) \
     { \
         printf(ERR SYS_DBG_PREFIX" Heap chunk overflow"); \
@@ -380,7 +383,6 @@ void heap_init(void **heap, void *prev_heap, uint8_t heap_class)
 HeapHandler64 heap_alloc(void *heap, size_t size, uint8_t heap_class, BackgroundProcessQueue *queue)
 {
     HeapHandler64 rtn_obj = {0};
-    rtn_obj.s = size;
 
     size_t chunk_count;
     printf("inside heap_alloc %u\n", rtn_obj.s);
@@ -465,7 +467,7 @@ HeapHandler64 heap_alloc(void *heap, size_t size, uint8_t heap_class, Background
     ); \
 }
 
-HeapHandler64 heap_free(HeapHandler64 hh, uint8_t heap_class, BackgroundProcessQueue *queue)
+void heap_free(HeapHandler64 hh, uint8_t heap_class, BackgroundProcessQueue *queue)
 {
     Worker *w = &queue->worker;
     switch (heap_class)
@@ -493,6 +495,9 @@ HeapHandler64 heap_free(HeapHandler64 hh, uint8_t heap_class, BackgroundProcessQ
 
 #define HEAP_REALLOC(HEAP, ALIAS, CH_TYPE) \
 { \
+    uint8_t mem_page_mask = sizeof(HEAP->mem[0]) - 1; \
+    size = (size + mem_page_mask) & ~(mem_page_mask); \
+    rtn_obj.s = size; \
     if (size > sizeof(HEAP->mem)) \
     { \
         printf(ERR SYS_DBG_PREFIX" Heap chunk overflow"); \
@@ -609,7 +614,6 @@ HeapHandler64 heap_realloc(HeapHandler64 hh, size_t size, uint8_t heap_class, Ba
 {
     if (hh.s == size) return hh;
     HeapHandler64 rtn_obj = hh;
-    rtn_obj.s = size;
     Worker *w = &queue->worker;
     size_t chunk_count;
     switch (heap_class)

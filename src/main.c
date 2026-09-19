@@ -108,11 +108,12 @@ int main(int argc, char **argv)
         printf("%u\n", hh.s);
         printf("%p\n", hh.heap);
         printf("%p\n", app.heap);
-        uint64_t some_value = 2320U;
+        uint64_t some_value = 0U;
         memcpy(((Heap *)hh.heap)->mem + hh.a, &some_value, hh.s);
         uint64_t dst;
         memcpy(&dst, ((Heap *)hh.heap)->mem + hh.a, hh.s);
         printf("dst: %u\n", dst);
+        heap_free(hh, HEAP_CLASS_HEAP, &app.hflo_queue);
         
     }
     terminate(&app.hflo_queue.worker);

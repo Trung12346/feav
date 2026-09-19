@@ -411,35 +411,33 @@ HeapHandler64 heap_alloc(void *heap, size_t size, uint8_t heap_class, Background
 
 #define HEAP_FREE(HEAP, ALIAS, CH_TYPE) \
 { \
-    uint##CH_TYPE##_t hash_ind_h = hash_2_index(hash64(hh.a + hh.s), UINT##CH_TYPE##_MAX); \
-    uint##CH_TYPE##_t hash_ind_t = hash_2_index(hash64(hh.a), UINT##CH_TYPE##_MAX); \
+    size_t chunk_size = hh.s / sizeof(HEAP->mem[0]); \
+    uint8_t hash_ind_h = hash_2_index(hash64(hh.a + chunk_size), UINT8_MAX); \
+    uint8_t hash_ind_t = hash_2_index(hash64(hh.a), UINT8_MAX); \
     AcquireSRWLockExclusive(&HEAP->free_list_lock); \
     HeapChunkHandler##CH_TYPE *head_chunk = &HEAP->free_list[HEAP->heap_free_list_cache_h[hash_ind_h]]; \
     HeapChunkHandler##CH_TYPE *tail_chunk = &HEAP->free_list[HEAP->heap_free_list_cache_t[hash_ind_t]]; \
     bool outdated_hashmap = (ALIAS *)w->active_target == HEAP; \
-    bool is_head_free = head_chunk->a == hh.a + hh.s && !outdated_hashmap; \
+    bool is_head_free = head_chunk->a == hh.a + chunk_size && !outdated_hashmap; \
     bool is_tail_free = tail_chunk->a + tail_chunk->s == hh.a && !outdated_hashmap; \
     bool merge_nd = false; \
-    HeapChunkHandler##CH_TYPE buffer; \
     HEAP->free_list_version++; \
     if (is_head_free) \
     { \
-        buffer = *head_chunk; \
-        buffer.a = hh.a; \
-        buffer.s += hh.s; \
+        head_chunk->a = hh.a; \
+        head_chunk->s += chunk_size; \
         merge_nd = true; \
     } \
     if (is_tail_free) \
     { \
         if (merge_nd) \
         { \
-            buffer.a = tail_chunk->a; \
-            buffer.s += tail_chunk->s; \
+            head_chunk->a = tail_chunk->a; \
+            head_chunk->s += tail_chunk->s; \
             *tail_chunk = HEAP->free_list[--HEAP->free_list_count]; \
-            *head_chunk = buffer; \
         } else \
         { \
-            tail_chunk->s += hh.s; \
+            tail_chunk->s += chunk_size; \
         } \
     } \
     if (!is_head_free && !is_tail_free) \
@@ -452,7 +450,7 @@ HeapHandler64 heap_alloc(void *heap, size_t size, uint8_t heap_class, Background
         HEAP->free_list[HEAP->free_list_count++] = (HeapChunkHandler##CH_TYPE) \
         { \
             .a = hh.a, \
-            .s = hh.s \
+            .s = chunk_size \
         }; \
     } \
     ReleaseSRWLockExclusive(&HEAP->free_list_lock); \
@@ -473,7 +471,7 @@ void heap_free(HeapHandler64 hh, uint8_t heap_class, BackgroundProcessQueue *que
     switch (heap_class)
     {
         case HEAP_CLASS_HEAP:
-            Heap *h = (Heap *)hh.heap;
+            Heap *h = (Heap *)hh.heap;            
 
             HEAP_FREE(h, Heap, 16);
             break;

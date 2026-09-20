@@ -5,14 +5,19 @@
 #include "vk_process.h"
 #include "CGLM/types.h"
 #include "dom/dom_entity.h"
+#include "background_worker/hashmap_cache_update.h"
 
 #define VIEW_PORT_WIDTH 1000
 #define VIEW_PORT_HEIGHT 760
+
 typedef struct
 {
     GLFWwindow *window;
     VkProcess vk_process;
     int gpu_select_flag;
+    DOBJPool *pool;
+    Heap *heap;
+    Worker hflo_worker;
 } App;
 App app_no_args_construct()
 {
@@ -53,6 +58,13 @@ static void vulkan_init(App *app)
     index_buffer_create(&app->vk_process);
     command_buffer_create(&app->vk_process);
     sync_object_create(&app->vk_process);
+}
+static void dobj_init(App *app)
+{
+    app->hflo_worker = worker_create();
+    CreateThread(NULL, 0, &heap_free_list_organizer, app, 0, NULL);
+
+    pool_init(&app->pool, NULL);
 }
 static void main_loop(App *app)
 {
@@ -117,6 +129,7 @@ static void clean_up(App *app)
 void run(App *app)
 {
     window_init(&app->window, app);
+    dobj_init(app);
     vulkan_init(app);
     main_loop(app);
     clean_up(app);

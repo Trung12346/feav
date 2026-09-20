@@ -7,12 +7,65 @@
 #include "interpreter/tokenizer.h"
 #include "debugger.h"
 
-bool walk_til_char(uint64_t curr_ind, char *value, uint64_t value_size, char c, uint64_t *end_ind)
+#define BUILD_DOM_OP_MODE_MASK 0b11110000
+
+typedef enum {
+    BEFORE_TAG,
+    IN_TAG,
+    BEFORE_ATTR_NAME,
+    IN_ATTR_NAME,
+    AFTER_ATTR_NAME,
+    BEFORE_ATTR_VALUE,
+    IN_ATTR_VALUE,
+    END
+} PARSER_STATE;
+
+typedef enum {
+    TAG_NAME   = 0b00000001,
+    ATTRIBUTE  = 0b00000010,
+    ATTR_VALUE = 0b00000100,
+    CREATE     = 0b00010000,
+    UPDATE     = 0b00100000
+} BuildDOBJOption;
+/*
+      1   2   3   4   5   6   7   8   <-- byte
+    | b | b | b | b | b | b | b | b |
+      _____________   _____________
+            |               |
+        type flags    operation mode
+*/
+
+void build_dom(DOBJPool *pool, uint64_t *glb_index, char *tag, uint8_t t_size, char *attr, uint8_t an_size, char *attr_v, uint16_t av_size, uint8_t *rqst_option, DOBJHandler *handler)
 {
-    for (; curr_ind < value_size; curr_ind++) if (value[curr_ind] == c) {*end_ind = curr_ind; return true;}
-    return false;
+    if (*rqst_option & UPDATE)
+    {
+        if (glb_index == NULL)
+        {
+            printf(ERR SYS_DBG_PREFIX" Invalid attempt to update unknown item from pool");
+            exit(1);
+        }
+        DOBJHandler obj_h = pool_search(pool, *glb_index);
+
+        *rqst_option &= ~BUILD_DOM_OP_MODE_MASK;
+    } else if (*rqst_option & CREATE)
+    {
+        DOBJ new_obj = (DOBJ){};
+        if (*rqst_option & TAG_NAME)
+        {
+            strcpy(new_obj.tag_name, tag);
+            new_obj.tag_id = tag_name_resolver(tag);
+
+            *rqst_option &= ~TAG_NAME;
+        }
+        dobj_pool_alloc(new_obj, pool);
+
+        *rqst_option &= ~BUILD_DOM_OP_MODE_MASK;
+    }
 }
 
+bool is_separator(char c) {
+    return (c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == '\0');
+}
 
 void parse(char *src, uint8_t *dict, uint64_t dict_size, App* app)
 {
@@ -36,13 +89,13 @@ void parse(char *src, uint8_t *dict, uint64_t dict_size, App* app)
     char tag_name[256];
     char attribute[256];
     char attr_value[1024 * 2];
-    bool is_end = false;
+    uint8_t tag_size;
+    uint8_t attr_name_size;
+    uint16_t attr_value_size;
 
-    bool tag_name_passed = false;
-    bool in_tag_name = false;
-    bool attr_name_passed = false;
-    bool in_attr_name = false;
-    bool in_attr_value = false;
+    PARSER_STATE state = BEFORE_TAG;
+    bool enclosed_value = false;
+    bool value_transit = false;
 
     //construct logical objects on memory
     for (uint64_t i = 0; i < dict_size - 1;)
@@ -76,92 +129,91 @@ void parse(char *src, uint8_t *dict, uint64_t dict_size, App* app)
         {
             value = malloc(value_size);
             memcpy(value, src + token_index + TOKEN_WIDTH, value_size);
-            printf("%s", value);
+            //printf("%s", value);
 
             for (uint64_t i = 0; i < value_size; i++)
             {
-                if (!tag_name_passed && !in_tag_name && value[i] != ' ')
+                switch (state)
                 {
-                    in_tag_name = true;
+                    case BEFORE_TAG:
+                        if (!is_separator(value[i]))
+                        {
+                            strt_value_ind = i;
+                            state = IN_TAG;
+                        }
+                        break;
+                    case IN_TAG:
+                        if (is_separator(value[i]))
+                        {
+                            end_value_ind = i - 1;
+                            state = BEFORE_ATTR_NAME;
 
-                    strt_value_ind = i;
-                } else if (!tag_name_passed && in_tag_name && value[i] == ' ')
-                {
-                    in_tag_name = false;
-                    tag_name_passed = true;
+                            tag_size = end_value_ind - strt_value_ind + 1;
+                            memcpy(tag_name, value + strt_value_ind, tag_size);
+                            tag_name[strt_value_ind + tag_size++] = '\0';
+                        }
+                        break;
+                    case BEFORE_ATTR_NAME:
+                        if (!is_separator(value[i]))
+                        {
+                            strt_value_ind = i;
+                            state = IN_ATTR_NAME;
+                        }
+                        break;
+                    case IN_ATTR_NAME:
+                        if (value[i] == '=')
+                        {
+                            end_value_ind = i - 1;
+                            state = BEFORE_ATTR_VALUE;
 
-                    end_value_ind = i - 1;
+                            attr_name_size = end_value_ind - strt_value_ind + 1;
+                            memcpy(attribute, value + strt_value_ind, attr_name_size);
+                            attribute[strt_value_ind + attr_name_size++] = '\0';
+                        } else if (is_separator(value[i]))
+                        {
+                            end_value_ind = i - 1;
+                            state = AFTER_ATTR_NAME;
 
+                            attr_name_size = end_value_ind - strt_value_ind + 1;
+                            memcpy(attribute, value + strt_value_ind, attr_name_size);
+                            attribute[strt_value_ind + attr_name_size++] = '\0';
+                        }
+                        break;
+                    case AFTER_ATTR_NAME:
+                        if (value[i] == '=')
+                        {
+                            state = BEFORE_ATTR_VALUE;
+                        } else if (!is_separator(value[i]))
+                        {
+                            state = IN_ATTR_NAME;
+                            strt_value_ind = i;
+                        }
+                        break;
+                    case BEFORE_ATTR_VALUE:
+                        if (value[i] == '\'' || value[i] == '"')
+                        {
+                            enclosed_value = true;
+                            strt_value_ind = i + 1;
+                            state = IN_ATTR_VALUE;
+                        } else if (!is_separator(value[i]))
+                        {
+                            strt_value_ind = i;
+                            state = IN_ATTR_VALUE;
+                        }
+                        break;
+                    case IN_ATTR_VALUE:
+                        if (value[i] == '\'' || value[i] == '"' || is_separator(value[i]))
+                        {
+                            end_value_ind = i - 1;
+                            state = BEFORE_ATTR_NAME;
 
-
-                    strt_value_ind = 0;
-                    end_value_ind = 0;
-                } else if (!tag_name_passed && in_tag_name && i == value_size - 1)
-                {
-                    end_value_ind = i;
-
-
-
-                    break;
-                } else if (tag_name_passed && !attr_name_passed && !in_attr_name && value[i] != ' ')
-                {
-                    in_attr_name = true;
-
-                    strt_value_ind = i;
-                } else if (tag_name_passed && !attr_name_passed && in_attr_name && value[i] == ' ')
-                {
-                    in_attr_name = false;
-                    attr_name_passed = true;
-
-                    end_value_ind = i - 1;
-                    
-
-
-                    strt_value_ind = 0;
-                    end_value_ind = 0;
-                } else if (tag_name_passed && attr_name_passed && !in_attr_name && !in_attr_value && value[i] != '=' && value[i] != ' ' && value[i] != '"')
-                {
-                    attr_name_passed = false;
-                    in_attr_name = false;
-                    i--;
-                } else if (tag_name_passed && !attr_name_passed && in_attr_name && value[i] == '=')
-                {
-                    in_attr_name = false;
-                    attr_name_passed = true;
-
-                    end_value_ind = i - 1;
-
-
-
-                    strt_value_ind = 0;
-                    end_value_ind = 0;
-                } else if (tag_name_passed && !attr_name_passed && in_attr_name && i == value_size - 1)
-                {
-                    end_value_ind = i;
-
-
-
-                    break;
-                } else if (tag_name_passed && attr_name_passed && !in_attr_name && !in_attr_value && value[i] == '"')
-                {
-                    in_attr_value = true;
-
-                    strt_value_ind = i + 1;
-                } else if (tag_name_passed && attr_name_passed && !in_attr_name && in_attr_value && value[i] == '"')
-                {
-                    attr_name_passed = false;
-                    in_attr_value = false;
-
-                    end_value_ind = i - 1;
-                    
-
-
-                    strt_value_ind = 0;
-                    end_value_ind = 0;
+                            attr_value_size = end_value_ind - strt_value_ind + 1;
+                            memcpy(attr_value, value + strt_value_ind, attr_value_size);
+                            attr_value[strt_value_ind + attr_value_size++] = '\0';
+                        }
+                        break;
                 }
             }
-
-
 
             free(value);
             value = NULL;
@@ -172,6 +224,5 @@ void parse(char *src, uint8_t *dict, uint64_t dict_size, App* app)
     free(src);
     free(dict);
 }
-
 
 #endif

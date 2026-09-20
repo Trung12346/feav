@@ -16,7 +16,7 @@ rmdir /s /q build
 
 mkdir build
 
-gcc -g -std=c99 -march=native ^
+gcc -g -std=c11 -march=native ^
 src\main.c ^
 -I include ^
 -I C:\VulkanSDK\1.4.357.0\Include ^

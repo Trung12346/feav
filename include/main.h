@@ -85,4 +85,9 @@ void shader_bin_read(const char *file, uint64_t *p_size, uint32_t *p_buffer)
 //     return size;
 // }
 
+uint32_t hash_2_index(uint32_t hash, size_t size)
+{
+    return hash & (size - 1);
+}
+
 #endif

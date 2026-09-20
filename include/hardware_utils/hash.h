@@ -8,7 +8,7 @@
 #endif
 #include <stdint.h>
 
-uint32_t hash(uint32_t input)
+uint32_t crc32(uint32_t input)
 {
     #if defined(__SSE4_2__)
         return _mm_crc32_u32(0, input);

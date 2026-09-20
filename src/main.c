@@ -11,6 +11,7 @@
 #include "interpreter/preprocessor.h"
 #include "interpreter/tokenizer.h"
 #include "interpreter/parser.h"
+#include "layout_engine/resource_mgr.h"
 
 #ifndef ARG_VAL
 #define ARG_VAL char*value=argv[i+1];if(strncmp(value,"--", 2) == 0){printf(ERR SYS_DBG_PREFIX" Invalid argument for %s",argv[i]);exit(1);}
@@ -102,18 +103,32 @@ int main(int argc, char **argv)
         // tokenize(tok_argc, tok_argv, preproced, size, &dst, &dst_size, &dict, &dict_size);
         
         // parse(dst, dict, dict_size, &app);
-        dobj_init(&app);
-        HeapHandler64 hh = heap_alloc(app.heap, 8, HEAP_CLASS_HEAP, &app.hflo_queue);
-        printf("%u\n", hh.a);
-        printf("%u\n", hh.s);
-        printf("%p\n", hh.heap);
-        printf("%p\n", app.heap);
-        uint64_t some_value = 0U;
-        memcpy(((Heap *)hh.heap)->mem + hh.a, &some_value, hh.s);
-        uint64_t dst;
-        memcpy(&dst, ((Heap *)hh.heap)->mem + hh.a, hh.s);
-        printf("dst: %u\n", dst);
-        heap_free(hh, HEAP_CLASS_HEAP, &app.hflo_queue);
+
+
+
+        // dobj_init(&app);
+        // HeapHandler64 hh = heap_alloc(app.heap, 8, HEAP_CLASS_HEAP, &app.hflo_queue);
+        // printf("%u\n", hh.a);
+        // printf("%u\n", hh.s);
+        // printf("%p\n", hh.heap);
+        // printf("%p\n", app.heap);
+        // uint64_t some_value = 0U;
+        // memcpy(((Heap *)hh.heap)->mem + hh.a, &some_value, hh.s);
+        // uint64_t dst;
+        // memcpy(&dst, ((Heap *)hh.heap)->mem + hh.a, hh.s);
+        // printf("dst: %u\n", dst);
+        // heap_free(hh, HEAP_CLASS_HEAP, &app.hflo_queue);
+
+        WorkersProperties wp;
+        WorkersGetProperties(&wp);
+        printf("logical core:");
+        for (uint8_t i = 0; i < wp.logical_core_count; i++)
+        {
+            printf("thread: %u @ core: %u\n",
+                wp.physical_device_core_n_thread_relationship[i].thread,
+                wp.physical_device_core_n_thread_relationship[i].core
+            );
+        }
         
     }
     terminate(&app.hflo_queue.worker);

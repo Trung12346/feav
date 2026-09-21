@@ -17,7 +17,7 @@ typedef struct
     int gpu_select_flag;
     DOBJPool *pool;
     Heap *heap;
-    Worker hflo_worker;
+    BackgroundProcessQueue hflo_queue;
 } App;
 App app_no_args_construct()
 {
@@ -61,8 +61,8 @@ static void vulkan_init(App *app)
 }
 static void dobj_init(App *app)
 {
-    app->hflo_worker = worker_create();
-    CreateThread(NULL, 0, &heap_free_list_organizer, app, 0, NULL);
+    app->hflo_queue.worker = worker_create();
+    CreateThread(NULL, 0, &heap_free_list_organizer, &app->hflo_queue, 0, NULL);
 
     pool_init(&app->pool, NULL);
 }

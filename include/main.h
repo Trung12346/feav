@@ -3,6 +3,8 @@
 
 #include <windows.h>
 #include <stdio.h>
+#include <stdint.h>
+#include "debugger.h"
 
 #define ARR_SIZE(p_size, return_size, p_arr) \
 { \
@@ -24,7 +26,7 @@ typedef enum
     true
 } bool;
 
-uint32_t unsigned_type_width_resolver(uintmax_t type)
+uint32_t unsigned_type_width_resolver(uint64_t type)
 {
     switch (type)
     {

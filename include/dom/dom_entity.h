@@ -260,7 +260,7 @@ void dobj_pool_free(DOBJPool *pool, uint64_t pool_glb_index)
     (heap)->free_list_alloc_count = FREE_LIST_ALLOC_COUNT; \
     (heap)->free_list = malloc(sizeof(HeapChunkHandler##handler_size) * FREE_LIST_ALLOC_COUNT); \
     (heap)->free_list[0] = (HeapChunkHandler##handler_size){0, 0}; \
-    ARR_SIZE(&(heap)->free_list[0].s, UINT64_MAX, (heap)->free_list) \
+    ARR_SIZE(&(heap)->free_list[0].s, UINT64_MAX, (heap)->mem) \
     if (prev_heap != NULL) \
     { \
         (heap)->p_prev = prev_heap; \
@@ -329,6 +329,7 @@ void heap_init(void **heap, void *prev_heap, uint8_t heap_class)
             ch->a += size; \
             ch->s -= size; \
             chunk_found = true; \
+            HEAP->live_objects++; \
             break; \
         } else if (ch->s == size) \
         { \
@@ -336,6 +337,7 @@ void heap_init(void **heap, void *prev_heap, uint8_t heap_class)
             rtn_obj.a = ch->a; \
             *ch = HEAP->free_list[--HEAP->free_list_count]; \
             chunk_found = true; \
+            HEAP->live_objects++; \
             break; \
         } \
     } \
@@ -535,9 +537,10 @@ HeapHandler64 heap_free(HeapHandler64 hh, uint8_t heap_class, BackgroundProcessQ
             if (HEAP->p_next == NULL) \
             { \
                 heap_init(&HEAP->p_next, HEAP, heap_class); \
-                ALIAS *nh = (ALIAS *)HEAP->p_next; \
-                rtn_obj = heap_alloc(nh, size, heap_class, queue); \
             } \
+            ALIAS *nh = (ALIAS *)HEAP->p_next; \
+            rtn_obj = heap_alloc(nh, size, heap_class, queue); \
+            memcpy(nh->mem[rtn_obj.a], HEAP->mem[hh.a], size * sizeof(HEAP->mem[0])); \
             HEAP->live_objects--; \
         } \
         heap_free(hh, heap_class, queue); \

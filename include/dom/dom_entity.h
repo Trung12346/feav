@@ -339,23 +339,47 @@ HeapHandler64 heap_realloc(HeapHandler64 hh, size_t size, uint8_t heap_class, Wo
             Heap *h = (Heap *)hh.heap;
 
             size_t after_lc_addr = hh.a + hh.s;
-            uint16_t ind = hash_2_index(hash64(after_lc_addr), UINT16_MAX);
-            HeapChunkHandler16 ch = h->free_list[ind];
+            uint16_t hash_ind = hash_2_index(hash64(after_lc_addr), UINT16_MAX);
+            HeapChunkHandler16 *p_ch = &h->free_list[h->heap_free_list_cache_h[hash_ind]];
+            HeapChunkHandler16 ch = *p_ch;
             bool is_shrink = size < hh.s;
             bool after_free_present = ch.a == after_lc_addr;
             bool is_valid_extend = after_free_present && hh.s + ch.s >= size;
             bool outdated_hashmap = (Heap *)w->active_target == h;
             if (is_shrink && after_free_present)
             {
-                h->free_list[ind].a = hh.a + size;
-                h->free_list[ind].s += (hh.s - size);
+                p_ch->a = hh.a + size;
+                p_ch->s += (hh.s - size);
                 rtn_obj.s = size;
             } else if (is_valid_extend && !outdated_hashmap)
             {
                 //run algirthm to recalculate and expand
-
+                size_t offset = (size - hh.s);
+                if (offset == p_ch->s)
+                {
+                    *p_ch = h->free_list[--h->free_list_count];
+                } else {
+                    p_ch->a += offset;
+                }
+                
             } else {
-                //scan free list 
+                //scan free list
+                bool chunk_found = false;
+                for (uint16_t i = 0; i < h->free_list_count; i++)
+                {
+                    if (h->free_list[i].s > size)
+                    {
+                        h->free_list[i].a += size;
+                        h->free_list[i].s -= size;
+                        chunk_found = true;
+                        break;
+                    } else if (h->free_list[i].s == size)
+                    {
+                        h->free_list_count--;
+                        chunk_found = true;
+                        break;
+                    }
+                }
             }
             
             break;

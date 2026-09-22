@@ -116,24 +116,23 @@ typedef enum {
 typedef struct {
     void *heap;
     uint16_t a;
-    uint16_t s;
+    uint16_t s; //in byte
 } HeapHandler16;
 typedef struct {
     uint16_t a;
-    uint16_t s;
+    uint16_t s; //in word
 } HeapChunkHandler16;
 typedef struct {
     void *heap;
     uint64_t a;
-    uint64_t s;
+    uint64_t s; //in byte
 } HeapHandler64;
 typedef struct {
     uint64_t a;
-    uint64_t s;
+    uint64_t s; //in qword
 } HeapChunkHandler64;
 
 typedef struct {
-    uint8_t class;
     uint16_t heap_index;
     uint16_t live_objects;
     void *p_prev;
@@ -144,10 +143,9 @@ typedef struct {
     uint16_t heap_free_list_cache_h[HEAP_SIZE / 2];
     uint16_t heap_free_list_cache_t[HEAP_SIZE / 2];
 
-    uint16_t mem[HEAP_SIZE / 2]; //size: 128KB, page size: 2B, (heap size / minimum allocatable size) = UINT16_MAX
+    uint16_t mem[HEAP_SIZE / 2]; //size: 128KB, page size: 2B, minimum allocatable chunk is sizeof(mem) / (UINT16_MAX + 1) = 2B
 } Heap;
 typedef struct {
-    uint8_t class;
     uint16_t heap_index;
     uint8_t live_objects;
     void *p_prev;
@@ -158,10 +156,9 @@ typedef struct {
     uint8_t heap_free_list_cache_h[256];
     uint8_t heap_free_list_cache_t[256];
 
-    uint64_t mem[BIG_HEAP_SIZE / 8]; //size: 8MB, page size: 8B, (heap size / minimum allocatable size) < UINT8_MAX
+    uint64_t mem[BIG_HEAP_SIZE / 8]; //size: 8MB, page size: 8B, minimum allocatable chunk is sizeof(mem) / (UINT8_MAX + 1) = 32KB
 } BHeap;
 typedef struct {
-    uint8_t class;
     uint16_t heap_index;
     uint8_t live_objects;
     void *p_prev;
@@ -173,7 +170,7 @@ typedef struct {
     uint8_t heap_free_list_cache_t[256];
     uint8_t class;
 
-    uint64_t mem[BIG_BIG_HEAP_SIZE / 8]; //size: 512MB, page size: 8B, (heap size / minimum allocatable size) < UINT8_MAX
+    uint64_t mem[BIG_BIG_HEAP_SIZE / 8]; //size: 512MB, page size: 8B, minimum allocatable chunk is sizeof(mem) / (UINT16_MAX + 1) = 2MB
 } BBHeap;
 
 typedef enum {

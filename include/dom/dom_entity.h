@@ -253,14 +253,13 @@ void dobj_pool_free(DOBJPool *pool, uint64_t pool_glb_index)
     }
 }
 
-#define HEAP_INIT(heap, prev_heap, handler_size, HEAP_CLASS) \
+#define HEAP_INIT(heap, prev_heap, handler_size) \
 { \
     (heap)->live_objects = 0; \
     (heap)->free_list_count = 1; \
     (heap)->free_list_alloc_count = FREE_LIST_ALLOC_COUNT; \
     (heap)->free_list = malloc(sizeof(HeapChunkHandler##handler_size) * FREE_LIST_ALLOC_COUNT); \
     (heap)->free_list[0] = (HeapChunkHandler##handler_size){0, 0}; \
-    (heap)->class = HEAP_CLASS; \
     ARR_SIZE(&(heap)->free_list[0].s, UINT64_MAX, (heap)->free_list) \
     if (prev_heap != NULL) \
     { \
@@ -285,7 +284,7 @@ void heap_init(void **heap, void *prev_heap, uint8_t heap_class)
             Heap *h = (Heap *)*heap;
             Heap *ph = (Heap *)prev_heap;
 
-            HEAP_INIT(h, ph, 16, heap_class);
+            HEAP_INIT(h, ph, 16);
             break;
         case HEAP_CLASS_BIG_HEAP:
             *heap = malloc(sizeof(BHeap));
@@ -293,7 +292,7 @@ void heap_init(void **heap, void *prev_heap, uint8_t heap_class)
             BHeap *bh = (BHeap *)*heap;
             BHeap *bph = (BHeap *)prev_heap;
 
-            HEAP_INIT(bh, bph, 64, heap_class);
+            HEAP_INIT(bh, bph, 64);
             break;
         case HEAP_CLASS_BIG_BIG_HEAP:
             *heap = malloc(sizeof(BBHeap));
@@ -301,7 +300,7 @@ void heap_init(void **heap, void *prev_heap, uint8_t heap_class)
             BBHeap *bbh = (BBHeap *)*heap;
             BBHeap *bbph = (BBHeap *)prev_heap;
 
-            HEAP_INIT(bbh, bbph, 64, heap_class);
+            HEAP_INIT(bbh, bbph, 64);
             break;
         default:
             printf(ERR SYS_DBG_PREFIX" Undefined heap class initialization");
@@ -310,17 +309,22 @@ void heap_init(void **heap, void *prev_heap, uint8_t heap_class)
 }
 
 
-#define HEAP_ALLOC() \
+#define HEAP_ALLOC(HEAP, CH_TYPE) \
 { \
-    size = size / 2; \
+    if (size > sizeof(HEAP->mem)) \
+    { \
+        printf(ERR SYS_DBG_PREFIX" Heap chunk overflow"); \
+        exit(1); \
+    } \
+    size = size / sizeof(HEAP->mem[0]); \
     rtn_obj.s = size; \
     bool chunk_found = false; \
-    for (uint16_t i = 0; i < h->free_list_count; i++) \
+    for (uint##CH_TYPE##_t i = 0; i < HEAP->free_list_count; i++) \
     { \
-        HeapChunkHandler16 *ch = &h->free_list[i]; \
+        HeapChunkHandler##CH_TYPE *ch = &HEAP->free_list[i]; \
         if (ch->s > size) \
         { \
-            rtn_obj.heap = h; \
+            rtn_obj.heap = HEAP; \
             rtn_obj.a = ch->a; \
             ch->a += size; \
             ch->s -= size; \
@@ -328,24 +332,33 @@ void heap_init(void **heap, void *prev_heap, uint8_t heap_class)
             break; \
         } else if (ch->s == size) \
         { \
-            rtn_obj.heap = h; \
+            rtn_obj.heap = HEAP; \
             rtn_obj.a = ch->a; \
-            *ch = h->free_list[--h->free_list_count]; \
+            *ch = HEAP->free_list[--HEAP->free_list_count]; \
             chunk_found = true; \
             break; \
         } \
     } \
     if (!chunk_found) \
     { \
-        if (h->p_next == NULL) \
+        if (HEAP->p_next == NULL) \
         { \
-            heap_init(&h->p_next, h, heap_class); \
+            heap_init(&HEAP->p_next, HEAP, heap_class); \
         } \
-        rtn_obj = heap_alloc(h->p_next, size, heap_class); \
-        h->live_objects--; \
+        rtn_obj = heap_alloc(HEAP->p_next, size, heap_class, queue); \
+        HEAP->live_objects--; \
     } \
+    queue_submit_hflo \
+    ( \
+        (BackgroundProcessQueueSubmitInfo) \
+        { \
+            .class = heap_class, \
+            .p_target = HEAP, \
+            .p_queue = queue \
+        } \
+    ); \
 }
-HeapHandler64 heap_alloc(void *heap, size_t size, uint8_t heap_class)
+HeapHandler64 heap_alloc(void *heap, size_t size, uint8_t heap_class, BackgroundProcessQueue *queue)
 {
     HeapHandler64 rtn_obj = {0};
     switch (heap_class)
@@ -353,170 +366,207 @@ HeapHandler64 heap_alloc(void *heap, size_t size, uint8_t heap_class)
         case HEAP_CLASS_HEAP:
             Heap *h = (Heap *)heap;
 
-            if (size > sizeof(h->mem))
-            {
-                printf(ERR SYS_DBG_PREFIX" Heap chunk overflow");
-                exit(1);
-            }
-            size = size / 2;
-            rtn_obj.s = size;
-
-            bool chunk_found = false;
-            for (uint16_t i = 0; i < h->free_list_count; i++)
-            {
-                HeapChunkHandler16 *ch = &h->free_list[i];
-                if (ch->s > size)
-                {
-                    rtn_obj.heap = h;
-                    rtn_obj.a = ch->a;
-                    ch->a += size;
-                    ch->s -= size;
-                    chunk_found = true;
-                    break;
-                } else if (ch->s == size)
-                {
-                    rtn_obj.heap = h;
-                    rtn_obj.a = ch->a;
-                    *ch = h->free_list[--h->free_list_count];
-                    chunk_found = true;
-                    break;
-                }
-            }
-            if (!chunk_found)
-            {
-                if (h->p_next == NULL)
-                {
-                    heap_init(&h->p_next, h, heap_class);
-                }
-                rtn_obj = heap_alloc(h->p_next, size, heap_class);
-                h->live_objects--;
-            }
+            HEAP_ALLOC(h, 16);
             return rtn_obj;
         case HEAP_CLASS_BIG_HEAP:
             BHeap *bh = (BHeap *)heap;
 
-
-            break;
+            HEAP_ALLOC(bh, 64);
+            return rtn_obj;
         case HEAP_CLASS_BIG_BIG_HEAP:
             BBHeap *bbh = (BBHeap *)heap;
 
-
-            break;
+            HEAP_ALLOC(bbh, 64);
+            return rtn_obj;
         default:
             printf(ERR SYS_DBG_PREFIX" Undefined heap class allocation");
             exit(1);
     }
 }
-HeapHandler64 heap_free(HeapHandler64 hh, uint8_t heap_class)
+
+#define HEAP_FREE(HEAP, ALIAS, CH_TYPE) \
+{ \
+    uint##CH_TYPE##_t hash_ind_h = hash_2_index(hash64(hh.a + hh.s), UINT##CH_TYPE##_MAX); \
+    uint##CH_TYPE##_t hash_ind_t = hash_2_index(hash64(hh.a), UINT##CH_TYPE##_MAX); \
+    HeapChunkHandler##CH_TYPE *head_chunk = &HEAP->free_list[HEAP->heap_free_list_cache_h[hash_ind_h]]; \
+    HeapChunkHandler##CH_TYPE *tail_chunk = &HEAP->free_list[HEAP->heap_free_list_cache_t[hash_ind_t]]; \
+    bool outdated_hashmap = (ALIAS *)w->active_target == HEAP; \
+    bool is_head_free = head_chunk->a == hh.a + hh.s && !outdated_hashmap; \
+    bool is_tail_free = tail_chunk->a + tail_chunk->s == hh.a && !outdated_hashmap; \
+    bool merge_nd = false; \
+    HeapChunkHandler##CH_TYPE buffer; \
+    if (is_head_free) \
+    { \
+        buffer = *head_chunk; \
+        buffer.a = hh.a; \
+        buffer.s += hh.s; \
+        merge_nd = true; \
+    } \
+    if (is_tail_free) \
+    { \
+        if (merge_nd) \
+        { \
+            buffer.a = tail_chunk->a; \
+            buffer.s += tail_chunk->s; \
+            *tail_chunk = HEAP->free_list[--HEAP->free_list_count]; \
+            *head_chunk = buffer; \
+        } else \
+        { \
+            tail_chunk->s += hh.s; \
+        } \
+    } \
+    if (!is_head_free && !is_tail_free) \
+    { \
+        HEAP->free_list[HEAP->free_list_count++] = (HeapChunkHandler##CH_TYPE) \
+        { \
+            .a = hh.a, \
+            .s = hh.s \
+        }; \
+    } \
+    queue_submit_hflo \
+    ( \
+        (BackgroundProcessQueueSubmitInfo) \
+        { \
+            .p_queue = queue, \
+            .p_target = HEAP, \
+            .class = heap_class \
+        } \
+    ); \
+}
+
+HeapHandler64 heap_free(HeapHandler64 hh, uint8_t heap_class, BackgroundProcessQueue *queue)
 {
+    Worker *w = &queue->worker;
     switch (heap_class)
     {
         case HEAP_CLASS_HEAP:
             Heap *h = (Heap *)hh.heap;
 
-
+            HEAP_FREE(h, Heap, 16);
             break;
         case HEAP_CLASS_BIG_HEAP:
             BHeap *bh = (BHeap *)hh.heap;
 
-
+            HEAP_FREE(bh, BHeap, 64);
             break;
         case HEAP_CLASS_BIG_BIG_HEAP:
             BBHeap *bbh = (BBHeap *)hh.heap;
 
-
+            HEAP_FREE(bbh, BBHeap, 64);
             break;
         default:
             printf(ERR SYS_DBG_PREFIX" Undefined heap class deallocation");
             exit(1);
     }
 }
+
+#define HEAP_REALLOC(HEAP, ALIAS, CH_TYPE) \
+{ \
+    if (size > sizeof(HEAP->mem)) \
+    { \
+        printf(ERR SYS_DBG_PREFIX" Heap chunk overflow"); \
+        exit(1); \
+    } \
+    size = size / sizeof(HEAP->mem[0]); \
+    uint##CH_TYPE##_t after_lc_addr = hh.a + hh.s; \
+    uint##CH_TYPE##_t hash_ind = hash_2_index(hash64(after_lc_addr), UINT##CH_TYPE##_MAX); \
+    HeapChunkHandler##CH_TYPE *p_ch = &HEAP->free_list[HEAP->heap_free_list_cache_h[hash_ind]]; \
+    HeapChunkHandler##CH_TYPE ch = *p_ch; \
+    bool is_shrink = size < hh.s; \
+    bool after_free_present = ch.a == after_lc_addr; \
+    bool is_valid_extend = after_free_present && hh.s + ch.s >= size; \
+    bool outdated_hashmap = (ALIAS *)w->active_target == HEAP; \
+    if (is_shrink && after_free_present) \
+    { \
+        p_ch->a = hh.a + size; \
+        p_ch->s += (hh.s - size); \
+        queue_submit_hflo \
+        ( \
+        (BackgroundProcessQueueSubmitInfo) \
+            { \
+                .class = heap_class, \
+                .p_target = HEAP, \
+                .p_queue = queue \
+            } \
+        ); \
+        return rtn_obj; \
+    } else if (is_valid_extend && !outdated_hashmap) \
+    { \
+        size_t offset = (size - hh.s); \
+        if (offset == p_ch->s) \
+        { \
+            *p_ch = HEAP->free_list[--HEAP->free_list_count]; \
+        } else { \
+            p_ch->a += offset; \
+            p_ch->s -= offset; \
+        } \
+        queue_submit_hflo \
+        ( \
+            (BackgroundProcessQueueSubmitInfo) \
+            { \
+                .class = heap_class, \
+                .p_target = HEAP, \
+                .p_queue = queue \
+            } \
+        ); \
+        return rtn_obj; \
+    } else \
+    { \
+        bool chunk_found = false; \
+        for (uint##CH_TYPE##_t i = 0; i < HEAP->free_list_count; i++) \
+        { \
+            if (HEAP->free_list[i].s > size) \
+           { \
+                rtn_obj.a = HEAP->free_list[i].a; \
+                HEAP->free_list[i].a += size; \
+                HEAP->free_list[i].s -= size; \
+                chunk_found = true; \
+                break; \
+            } else if (HEAP->free_list[i].s == size) \
+            { \
+                rtn_obj.a = HEAP->free_list[i].a; \
+                HEAP->free_list[i] = HEAP->free_list[--HEAP->free_list_count]; \
+                chunk_found = true; \
+                break; \
+            } \
+        } \
+        if (!chunk_found) \
+        { \
+            if (HEAP->p_next == NULL) \
+            { \
+                heap_init(&HEAP->p_next, HEAP, heap_class); \
+                ALIAS *nh = (ALIAS *)HEAP->p_next; \
+                rtn_obj = heap_alloc(nh, size, heap_class, queue); \
+            } \
+            HEAP->live_objects--; \
+        } \
+        heap_free(hh, heap_class, queue); \
+        return rtn_obj; \
+    } \
+}
+
 HeapHandler64 heap_realloc(HeapHandler64 hh, size_t size, uint8_t heap_class, BackgroundProcessQueue *queue)
 {
     if (hh.s == size) return hh;
     HeapHandler64 rtn_obj = hh;
+    rtn_obj.s = size;
     Worker *w = &queue->worker;
     switch (heap_class)
     {
         case HEAP_CLASS_HEAP:
             Heap *h = (Heap *)hh.heap;
-            size = size / 2; //translate byte to heap native page size
 
-            size_t after_lc_addr = hh.a + hh.s;
-            uint16_t hash_ind = hash_2_index(hash64(after_lc_addr), UINT16_MAX);
-            HeapChunkHandler16 *p_ch = &h->free_list[h->heap_free_list_cache_h[hash_ind]];
-            HeapChunkHandler16 ch = *p_ch;
-            bool is_shrink = size < hh.s;
-            bool after_free_present = ch.a == after_lc_addr;
-            bool is_valid_extend = after_free_present && hh.s + ch.s >= size;
-            bool outdated_hashmap = (Heap *)w->active_target == h;
-            if (is_shrink && after_free_present)
-            {
-                p_ch->a = hh.a + size;
-                p_ch->s += (hh.s - size);
-                rtn_obj.s = size;
-
-                queue_submit_hflo(
-                    (BackgroundProcessQueueSubmitInfo)
-                    {
-                        .class = heap_class,
-                        .p_target = h,
-                        .p_queue = queue
-                    }
-                );
-            } else if (is_valid_extend && !outdated_hashmap)
-            {
-                //run algirthm to recalculate and expand
-                size_t offset = (size - hh.s);
-                if (offset == p_ch->s)
-                {
-                    *p_ch = h->free_list[--h->free_list_count];
-                } else { //offset < p_ch->s
-                    p_ch->a += offset;
-                    p_ch->s -= offset;
-                }
-                
-            } else {
-                //scan free list
-                bool chunk_found = false;
-                for (uint16_t i = 0; i < h->free_list_count; i++)
-                {
-                    if (h->free_list[i].s > size)
-                    {
-                        h->free_list[i].a += size;
-                        h->free_list[i].s -= size;
-                        chunk_found = true;
-                        break;
-                    } else if (h->free_list[i].s == size)
-                    {
-                        h->free_list[i] = h->free_list[--h->free_list_count];
-                        chunk_found = true;
-                        break;
-                    }
-                }
-                if (!chunk_found)
-                {
-                    if (h->p_next == NULL)
-                    {
-                        heap_init(&h->p_next, h, heap_class);
-                        //alloc
-
-                    }
-                    h->live_objects--;
-                }
-                //free old chunk
-            }
-            
+            HEAP_REALLOC(h, Heap, 16);
             break;
         case HEAP_CLASS_BIG_HEAP:
             BHeap *bh = (BHeap *)hh.heap;
 
-
+            HEAP_REALLOC(bh, BHeap, 64);
             break;
         case HEAP_CLASS_BIG_BIG_HEAP:
             BBHeap *bbh = (BBHeap *)hh.heap;
 
-
+            HEAP_REALLOC(bbh, BBHeap, 64);
             break;
         default:
             printf(ERR SYS_DBG_PREFIX" Undefined heap class access");

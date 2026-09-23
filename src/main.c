@@ -89,18 +89,20 @@ int main(int argc, char **argv)
     if (!is_special_op)
     {
         // run(&app);
-        char *preproced;
-        uint64_t size;
-        preprocess(preproc_argc, preproc_argv, &preproced, &size);
-        printf("size  %u\n", size);
-
-        char *dst;
-        uint64_t dst_size;
-        uint8_t *dict;
-        uint64_t dict_size;
-        tokenize(tok_argc, tok_argv, preproced, size, &dst, &dst_size, &dict, &dict_size);
         
-        parse(dst, dict, dict_size, &app);
+        // char *preproced;
+        // uint64_t size;
+        // preprocess(preproc_argc, preproc_argv, &preproced, &size);
+        // printf("size  %u\n", size);
+
+        // char *dst;
+        // uint64_t dst_size;
+        // uint8_t *dict;
+        // uint64_t dict_size;
+        // tokenize(tok_argc, tok_argv, preproced, size, &dst, &dst_size, &dict, &dict_size);
+        
+        // parse(dst, dict, dict_size, &app);
+        dobj_init(&app);
     }
     
     

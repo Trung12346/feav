@@ -540,7 +540,7 @@ HeapHandler64 heap_free(HeapHandler64 hh, uint8_t heap_class, BackgroundProcessQ
             } \
             ALIAS *nh = (ALIAS *)HEAP->p_next; \
             rtn_obj = heap_alloc(nh, size, heap_class, queue); \
-            memcpy(nh->mem[rtn_obj.a], HEAP->mem[hh.a], size * sizeof(HEAP->mem[0])); \
+            memcpy(&nh->mem[rtn_obj.a], &HEAP->mem[hh.a], size * sizeof(HEAP->mem[0])); \
             HEAP->live_objects--; \
         } \
         heap_free(hh, heap_class, queue); \

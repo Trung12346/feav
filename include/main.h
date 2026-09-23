@@ -15,7 +15,7 @@
     } else \
     { \
         uintmax_t size = sizeof(p_arr) / sizeof(p_arr[0]); \
-        if (size >> unsigned_type_width_resolver(return_size)) printf(WARN SYS_DBG_PREFIX" Return size overflowed\n"); \
+        if (size > return_size) printf(WARN SYS_DBG_PREFIX" Return size overflowed\n"); \
         *p_size = size; \
     } \
 }

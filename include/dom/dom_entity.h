@@ -245,7 +245,8 @@ void dobj_pool_free(DOBJPool *pool, uint64_t pool_glb_index)
     {
         obj.pool->status_flags[obj.item_index] &= ~POOL_STATUS_IS_OCCUPIED_BIT;
         pool->live_objects--;
-        if ((pool->live_objects < POOL_ELEMENT_COUNT / 2) && pool->p_next != NULL && ((DOBJPool *)pool->p_next)->live_objects == 0)
+        DOBJPool *p_pool_next = (DOBJPool *)pool->p_next;
+        if ((pool->live_objects < POOL_ELEMENT_COUNT / 2) && p_pool_next != NULL && p_pool_next->live_objects == 0 && p_pool_next->p_prev == NULL)
         {
             free((DOBJPool *)pool->p_next);
             pool->p_next = NULL;
@@ -255,23 +256,24 @@ void dobj_pool_free(DOBJPool *pool, uint64_t pool_glb_index)
 
 #define HEAP_INIT(heap, prev_heap, handler_size) \
 { \
-    (heap)->live_objects = 0; \
-    (heap)->free_list_count = 1; \
-    (heap)->free_list_alloc_count = FREE_LIST_ALLOC_COUNT; \
-    (heap)->free_list = malloc(sizeof(HeapChunkHandler##handler_size) * FREE_LIST_ALLOC_COUNT); \
-    (heap)->free_list[0] = (HeapChunkHandler##handler_size){0, 0}; \
-    ARR_SIZE(&(heap)->free_list[0].s, UINT64_MAX, (heap)->mem) \
+    heap->live_objects = 0; \
+    heap->free_list_count = 1; \
+    heap->free_list_alloc_count = FREE_LIST_ALLOC_COUNT; \
+    heap->free_list = malloc(sizeof(HeapChunkHandler##handler_size) * FREE_LIST_ALLOC_COUNT); \
+    heap->free_list[0] = (HeapChunkHandler##handler_size){0, 0}; \
+    ARR_SIZE(&heap->free_list[0].s, UINT64_MAX, heap->mem); \
+    printf("heap inited with free list size: %u\n", heap->free_list[0].s); \
     if (prev_heap != NULL) \
     { \
-        (heap)->p_prev = prev_heap; \
+        heap->p_prev = prev_heap; \
         prev_heap->p_next = heap; \
-        (heap)->heap_index = prev_heap->heap_index + 1; \
+        heap->heap_index = prev_heap->heap_index + 1; \
     } else \
     { \
-        (heap)->p_prev = NULL; \
-        (heap)->heap_index = 0; \
+        heap->p_prev = NULL; \
+        heap->heap_index = 0; \
     } \
-    (heap)->p_next = NULL; \
+    heap->p_next = NULL; \
 }
 
 void heap_init(void **heap, void *prev_heap, uint8_t heap_class)
@@ -316,22 +318,22 @@ void heap_init(void **heap, void *prev_heap, uint8_t heap_class)
         printf(ERR SYS_DBG_PREFIX" Heap chunk overflow"); \
         exit(1); \
     } \
-    size = size / sizeof(HEAP->mem[0]); \
-    rtn_obj.s = size; \
+    chunk_count = size / sizeof(HEAP->mem[0]); \
+    printf("chunk_count %u\nmem size %u\n", chunk_count, sizeof(HEAP->mem)); \
     bool chunk_found = false; \
     for (uint##CH_TYPE##_t i = 0; i < HEAP->free_list_count; i++) \
     { \
         HeapChunkHandler##CH_TYPE *ch = &HEAP->free_list[i]; \
-        if (ch->s > size) \
+        if (ch->s > chunk_count) \
         { \
             rtn_obj.heap = HEAP; \
             rtn_obj.a = ch->a; \
-            ch->a += size; \
-            ch->s -= size; \
+            ch->a += chunk_count; \
+            ch->s -= chunk_count; \
             chunk_found = true; \
             HEAP->live_objects++; \
             break; \
-        } else if (ch->s == size) \
+        } else if (ch->s == chunk_count) \
         { \
             rtn_obj.heap = HEAP; \
             rtn_obj.a = ch->a; \
@@ -363,6 +365,10 @@ void heap_init(void **heap, void *prev_heap, uint8_t heap_class)
 HeapHandler64 heap_alloc(void *heap, size_t size, uint8_t heap_class, BackgroundProcessQueue *queue)
 {
     HeapHandler64 rtn_obj = {0};
+    rtn_obj.s = size;
+
+    size_t chunk_count;
+    printf("inside heap_alloc %u\n", rtn_obj.s);
     switch (heap_class)
     {
         case HEAP_CLASS_HEAP:
@@ -469,19 +475,19 @@ HeapHandler64 heap_free(HeapHandler64 hh, uint8_t heap_class, BackgroundProcessQ
         printf(ERR SYS_DBG_PREFIX" Heap chunk overflow"); \
         exit(1); \
     } \
-    size = size / sizeof(HEAP->mem[0]); \
+    chunk_count = size / sizeof(HEAP->mem[0]); \
     uint##CH_TYPE##_t after_lc_addr = hh.a + hh.s; \
     uint##CH_TYPE##_t hash_ind = hash_2_index(hash64(after_lc_addr), UINT##CH_TYPE##_MAX); \
     HeapChunkHandler##CH_TYPE *p_ch = &HEAP->free_list[HEAP->heap_free_list_cache_h[hash_ind]]; \
     HeapChunkHandler##CH_TYPE ch = *p_ch; \
-    bool is_shrink = size < hh.s; \
+    bool is_shrink = chunk_count < hh.s; \
     bool after_free_present = ch.a == after_lc_addr; \
-    bool is_valid_extend = after_free_present && hh.s + ch.s >= size; \
+    bool is_valid_extend = after_free_present && hh.s + ch.s >= chunk_count; \
     bool outdated_hashmap = (ALIAS *)w->active_target == HEAP; \
     if (is_shrink && after_free_present) \
     { \
-        p_ch->a = hh.a + size; \
-        p_ch->s += (hh.s - size); \
+        p_ch->a = hh.a + chunk_count; \
+        p_ch->s += (hh.s - chunk_count); \
         queue_submit_hflo \
         ( \
         (BackgroundProcessQueueSubmitInfo) \
@@ -494,7 +500,7 @@ HeapHandler64 heap_free(HeapHandler64 hh, uint8_t heap_class, BackgroundProcessQ
         return rtn_obj; \
     } else if (is_valid_extend && !outdated_hashmap) \
     { \
-        size_t offset = (size - hh.s); \
+        size_t offset = (chunk_count - hh.s); \
         if (offset == p_ch->s) \
         { \
             *p_ch = HEAP->free_list[--HEAP->free_list_count]; \
@@ -517,14 +523,14 @@ HeapHandler64 heap_free(HeapHandler64 hh, uint8_t heap_class, BackgroundProcessQ
         bool chunk_found = false; \
         for (uint##CH_TYPE##_t i = 0; i < HEAP->free_list_count; i++) \
         { \
-            if (HEAP->free_list[i].s > size) \
+            if (HEAP->free_list[i].s > chunk_count) \
            { \
                 rtn_obj.a = HEAP->free_list[i].a; \
-                HEAP->free_list[i].a += size; \
-                HEAP->free_list[i].s -= size; \
+                HEAP->free_list[i].a += chunk_count; \
+                HEAP->free_list[i].s -= chunk_count; \
                 chunk_found = true; \
                 break; \
-            } else if (HEAP->free_list[i].s == size) \
+            } else if (HEAP->free_list[i].s == chunk_count) \
             { \
                 rtn_obj.a = HEAP->free_list[i].a; \
                 HEAP->free_list[i] = HEAP->free_list[--HEAP->free_list_count]; \
@@ -554,6 +560,7 @@ HeapHandler64 heap_realloc(HeapHandler64 hh, size_t size, uint8_t heap_class, Ba
     HeapHandler64 rtn_obj = hh;
     rtn_obj.s = size;
     Worker *w = &queue->worker;
+    size_t chunk_count;
     switch (heap_class)
     {
         case HEAP_CLASS_HEAP:

@@ -103,7 +103,19 @@ int main(int argc, char **argv)
         
         // parse(dst, dict, dict_size, &app);
         dobj_init(&app);
+        HeapHandler64 hh = heap_alloc(app.heap, 8, HEAP_CLASS_HEAP, &app.hflo_queue);
+        printf("%u\n", hh.a);
+        printf("%u\n", hh.s);
+        printf("%p\n", hh.heap);
+        printf("%p\n", app.heap);
+        uint64_t some_value = 2320U;
+        memcpy(((Heap *)hh.heap)->mem + hh.a, &some_value, hh.s);
+        uint64_t dst;
+        memcpy(&dst, ((Heap *)hh.heap)->mem + hh.a, hh.s);
+        printf("dst: %u\n", dst);
+        
     }
+    terminate(&app.hflo_queue.worker);
     
     
     

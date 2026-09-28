@@ -8,8 +8,9 @@
 
 typedef struct {
     _Atomic int work;
-   void *_Atomic active_target;
+    void *_Atomic active_target;
     HANDLE event;
+    _Atomic bool terminate;
 } Worker;
 typedef struct {
     void *queue_buffer[256];

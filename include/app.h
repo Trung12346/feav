@@ -64,6 +64,7 @@ static void dobj_init(App *app)
     app->hflo_queue.worker = worker_create();
     CreateThread(NULL, 0, &heap_free_list_organizer, &app->hflo_queue, 0, NULL);
 
+    heap_init((void **)&app->heap, NULL, HEAP_CLASS_HEAP);
     pool_init(&app->pool, NULL);
 }
 static void main_loop(App *app)

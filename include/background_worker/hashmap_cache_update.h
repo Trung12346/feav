@@ -127,6 +127,7 @@ DWORD WINAPI heap_free_list_organizer(void *arg)
     for (;;)
     {
         WaitForSingleObject(w->event, INFINITE);
+        if (atomic_load(&w->terminate)) break;
         if (atomic_exchange(&w->work, 0))
         {
             for (; queue->queue_submit_index - queue->queue_worker_index != 0;)
@@ -181,4 +182,9 @@ void queue_submit_hflo(BackgroundProcessQueueSubmitInfo info)
     SetEvent(w->event);
 }
 //future note: steal vulkan queue so worker is capable of handling awaiting requests appropriately too
+void terminate(Worker *w)
+{
+    atomic_store(&w->terminate, true);
+    SetEvent(w->event);
+}
 #endif

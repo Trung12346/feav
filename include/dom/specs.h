@@ -13,9 +13,9 @@
 #define POOL_STATUS_IS_OCCUPIED_BIT 0b00000001U
 #define POOL_ELEMENT_COUNT 1024
 #define POOL_STATUS_FLAGS_SIZE POOL_ELEMENT_COUNT * HALFWORD_WIDTH
-#define HEAP_SIZE 1024 * 128
-#define BIG_HEAP_SIZE 1024 * 1024 * 8
-#define BIG_BIG_HEAP_SIZE 1024 * 1024 * 512
+#define HEAP_SIZE 1024 * 64
+#define BIG_HEAP_SIZE 1024 * 1024 * 4
+#define BIG_BIG_HEAP_SIZE 1024 * 1024 * 256
 #define FREE_LIST_ALLOC_COUNT 32
 
 typedef uint64_t qword;
@@ -45,46 +45,46 @@ typedef enum {
 } UpdateDOBJFlagGroups;
 
 typedef enum {
-    CUSTOM      = 0,//
-    HTML        = 1,//
-    HEAD        = 2,//
+    CUSTOM      = 0,
+    HTML        = 1,
+    HEAD        = 2,
     BODY        = 3,
-    TITLE       = 4,//
+    TITLE       = 4,
     LINK        = 5,
     STYLE       = 6,
     SCRIPT      = 7,
     META        = 8,
-    DIV         = 9,//
-    P           = 10,//
+    DIV         = 9,
+    P           = 10,
     BR          = 11,
     HR          = 12,
-    H1          = 13,//
-    H2          = 14,//
-    H3          = 15,//
-    H4          = 16,//
-    H5          = 17,//
-    H6          = 18,//
-    A           = 19,//
-    IMG         = 20,//
-    UL          = 21,//
-    OL          = 22,//
-    LI          = 23,//
-    TABLE       = 24,//
-    THEAD       = 25,//
-    TBODY       = 26,//
-    TFOOT       = 27,//
-    TR          = 28,//
-    TH          = 29,//
-    TD          = 30,//
+    H1          = 13,
+    H2          = 14,
+    H3          = 15,
+    H4          = 16,
+    H5          = 17,
+    H6          = 18,
+    A           = 19,
+    IMG         = 20,
+    UL          = 21,
+    OL          = 22,
+    LI          = 23,
+    TABLE       = 24,
+    THEAD       = 25,
+    TBODY       = 26,
+    TFOOT       = 27,
+    TR          = 28,
+    TH          = 29,
+    TD          = 30,
     FORM        = 31,
-    DINPUT      = 32,//
-    TEXTAREA    = 33,//
+    DINPUT      = 32,
+    TEXTAREA    = 33,
     BUTTON      = 34,
     SELECT      = 35,
     OPTION      = 36,
-    LABEL       = 37,//
-    HEADER      = 38,//
-    NAV         = 39,//
+    LABEL       = 37,
+    HEADER      = 38,
+    NAV         = 39,
     MAIN        = 40,
     SECTION     = 41,
     ARTICLE     = 42,
@@ -94,7 +94,7 @@ typedef enum {
     AUDIO       = 46,
     SOURCE      = 47,
     CANVAS      = 48,
-    SVG         = 49,//
+    SVG         = 49,
     DETAILS     = 50,
     SUMMARY     = 51,
     IFRAME      = 52,
@@ -107,8 +107,8 @@ typedef enum {
     I           = 59,
     U           = 60,
     SMALL       = 61,
-    SUB         = 62,//
-    SUP         = 63//
+    SUB         = 62,
+    SUP         = 63
 } TagIdentifier;
 
 
@@ -143,7 +143,7 @@ typedef struct {
     uint16_t heap_free_list_cache_h[HEAP_SIZE / 2];
     uint16_t heap_free_list_cache_t[HEAP_SIZE / 2];
 
-    uint16_t mem[HEAP_SIZE / 2]; //size: 128KB, page size: 2B, minimum allocatable chunk is sizeof(mem) / (UINT16_MAX + 1) = 2B
+    uint16_t mem[HEAP_SIZE / 2]; //size: 64KB, page size: 2B, minimum allocatable chunk is sizeof(mem) / (UINT16_MAX + 1) = 2B
 } Heap;
 typedef struct {
     uint16_t heap_index;
@@ -156,7 +156,7 @@ typedef struct {
     uint8_t heap_free_list_cache_h[256];
     uint8_t heap_free_list_cache_t[256];
 
-    uint64_t mem[BIG_HEAP_SIZE / 8]; //size: 8MB, page size: 8B, minimum allocatable chunk is sizeof(mem) / (UINT8_MAX + 1) = 32KB
+    uint64_t mem[BIG_HEAP_SIZE / 8]; //size: 4MB, page size: 8B, desired minimum allocatable chunk is sizeof(mem) / (UINT8_MAX + 1) = 16KB
 } BHeap;
 typedef struct {
     uint16_t heap_index;
@@ -170,8 +170,11 @@ typedef struct {
     uint8_t heap_free_list_cache_t[256];
     uint8_t class;
 
-    uint64_t mem[BIG_BIG_HEAP_SIZE / 8]; //size: 512MB, page size: 8B, minimum allocatable chunk is sizeof(mem) / (UINT16_MAX + 1) = 2MB
+    uint64_t mem[BIG_BIG_HEAP_SIZE / 8]; //size: 256MB, page size: 8B, desired minimum allocatable chunk is sizeof(mem) / (UINT8_MAX + 1) = 1MB
 } BBHeap;
+//allocating less than desired minimum size may lead to key collision of cache, resulting in reduced performance
+
+
 
 typedef enum {
     HEAP_CLASS_HEAP = 1,

@@ -173,27 +173,36 @@ uint16_t available_pool_region_search(DOBJPool *pool, bool *free_found)
     for (uint32_t i = 0; i < POOL_STATUS_FLAGS_SIZE / QWORD_WIDTH; i++)
     {
         uint64_t buffer;
-        uint32_t sbuffer;
-        uint8_t ssbuffer;
+        // uint32_t sbuffer;
+        // uint8_t ssbuffer;
         memcpy(&buffer, pool->status_flags + i * 8, 8);
-        if (!(buffer & QWORD_SCAN_IS_OCCUPIED_MASK))
+        // if (!(buffer & QWORD_SCAN_IS_OCCUPIED_MASK))
+        // {
+        //     for (uint8_t si = 0; si < QWORD_WIDTH / DWORD_WIDTH; si++)
+        //     {
+        //         memcpy(&sbuffer, pool->status_flags + i * 8 + si * 4, 4);
+        //         if (!(sbuffer & DWORD_SCAN_IS_OCCUPIED_MASK))
+        //         {
+        //             for (uint8_t ssi = 0; ssi < DWORD_WIDTH / HALFWORD_WIDTH; ssi++)
+        //             {
+        //                 memcpy(&ssbuffer, pool->status_flags + i * 8 + si * 4 + ssi, 1);
+        //                 if (!(ssbuffer & HALFWORD_SCAN_IS_OCCUPIED_MASK))
+        //                 {
+        //                     *free_found = true;
+        //                     return i * 8 + si * 4 + ssi;
+        //                 }
+        //             }
+        //         }
+        //     }
+        // }
+        buffer = (~buffer) & QWORD_SCAN_IS_OCCUPIED_MASK;
+        if (buffer != 0)
         {
-            for (uint8_t si = 0; si < QWORD_WIDTH / DWORD_WIDTH; si++)
-            {
-                memcpy(&sbuffer, pool->status_flags + i * 8 + si * 4, 4);
-                if (!(sbuffer & DWORD_SCAN_IS_OCCUPIED_MASK))
-                {
-                    for (uint8_t ssi = 0; ssi < DWORD_WIDTH / HALFWORD_WIDTH; ssi++)
-                    {
-                        memcpy(&ssbuffer, pool->status_flags + i * 8 + si * 4 + ssi, 1);
-                        if (!(ssbuffer & HALFWORD_SCAN_IS_OCCUPIED_MASK))
-                        {
-                            *free_found = true;
-                            return i * 8 + si * 4 + ssi;
-                        }
-                    }
-                }
-            }
+            uint32_t free_index;
+            free_index = __builtin_ctzll(buffer);
+            *free_found = true;
+
+            return i * 8 + (free_index >> 3);
         }
     }
     return 0;

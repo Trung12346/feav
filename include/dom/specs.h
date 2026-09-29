@@ -3,6 +3,7 @@
 
 #include <stdint.h>
 #include <stdatomic.h>
+#include <windows.h>
 
 #define QWORD_SCAN_IS_OCCUPIED_MASK 0b0000000100000001000000010000000100000001000000010000000100000001ULL
 #define DWORD_SCAN_IS_OCCUPIED_MASK 0b00000001000000010000000100000001UL
@@ -140,8 +141,10 @@ typedef struct {
     HeapChunkHandler16 *free_list;
     uint16_t free_list_alloc_count;
     uint16_t free_list_count;
-    uint16_t heap_free_list_cache_h[HEAP_SIZE / 2];
-    uint16_t heap_free_list_cache_t[HEAP_SIZE / 2];
+    SRWLOCK free_list_lock;
+    uint64_t free_list_version;
+    uint16_t heap_free_list_cache_h[256];
+    uint16_t heap_free_list_cache_t[256];
 
     uint16_t mem[HEAP_SIZE / 2]; //size: 64KB, page size: 2B, minimum allocatable chunk is sizeof(mem) / (UINT16_MAX + 1) = 2B
 } Heap;
@@ -153,6 +156,8 @@ typedef struct {
     HeapChunkHandler64 *free_list;
     uint8_t free_list_alloc_count;
     uint8_t free_list_count;
+    SRWLOCK free_list_lock;
+    uint64_t free_list_version;
     uint8_t heap_free_list_cache_h[256];
     uint8_t heap_free_list_cache_t[256];
 
@@ -166,6 +171,8 @@ typedef struct {
     HeapChunkHandler64 *free_list;
     uint8_t free_list_alloc_count;
     uint8_t free_list_count;
+    SRWLOCK free_list_lock;
+    uint64_t free_list_version;
     uint8_t heap_free_list_cache_h[256];
     uint8_t heap_free_list_cache_t[256];
     uint8_t class;

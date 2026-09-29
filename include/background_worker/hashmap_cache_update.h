@@ -57,8 +57,11 @@ static void merge_run_##SUFFIX( \
     while (j < right) \
         dst[k++] = src[j++]; \
 } \
-int merge_sort_snapshot_##SUFFIX(TYPE *array, uint64_t count) \
+int merge_sort_snapshot_##SUFFIX(TYPE **p_array, uint64_t *p_count, SRWLOCK *lock, uint64_t *p_version) \
 { \
+    AcquireSRWLockExclusive(lock); \
+    uint64_t count = *p_count; \
+    ReleaseSRWLockExclusive(lock); \
     if (count < 2) \
         return 1; \
     TYPE *bufA = malloc(count * sizeof(*bufA)); \
@@ -69,7 +72,11 @@ int merge_sort_snapshot_##SUFFIX(TYPE *array, uint64_t count) \
         free(bufB); \
         return 0; \
     } \
-    memcpy(bufA, array, count * sizeof(*bufA)); \
+    AcquireSRWLockExclusive(lock); \
+    count = *p_count; \
+    uint64_t version = *p_version; \
+    memcpy(bufA, *p_array, count * sizeof(*bufA)); \
+    ReleaseSRWLockExclusive(lock); \
     for (uint64_t start = 0; start < count; start += HCH_INSERTION_THRESHOLD) \
     { \
         uint64_t end = start + HCH_INSERTION_THRESHOLD; \
@@ -100,7 +107,12 @@ int merge_sort_snapshot_##SUFFIX(TYPE *array, uint64_t count) \
         src = dst; \
         dst = swap; \
     } \
-    memcpy(array, src, count * sizeof(*array)); \
+    AcquireSRWLockExclusive(lock); \
+    if (*p_version == version) \
+    { \
+        memcpy(*p_array, src, count * sizeof(*src)); \
+    } \
+    ReleaseSRWLockExclusive(lock); \
     free(bufA); \
     free(bufB); \
     return 1; \
@@ -110,12 +122,12 @@ DEFINE_MERGE_SORT(64, HeapChunkHandler64)
 
 #define HASHMAP_REBUILD(SIZE, HEAP) \
 { \
-    merge_sort_snapshot_##SIZE(HEAP->free_list, HEAP->free_list_count); \
+    merge_sort_snapshot_##SIZE(HEAP->free_list, (uint64_t *)&HEAP->free_list_count, &HEAP->free_list_lock, &HEAP->free_list_version); \
     for (uint##SIZE##_t i = 0; i < HEAP->free_list_count; i++) \
     { \
-        uint##SIZE##_t h_hash_ind = hash_2_index(hash64(HEAP->free_list[i].a), UINT##SIZE##_MAX); \
+        uint##SIZE##_t h_hash_ind = hash_2_index(hash64(HEAP->free_list[i].a), UINT8_MAX); \
         HEAP->heap_free_list_cache_h[h_hash_ind] = i; \
-        uint##SIZE##_t t_hash_ind = hash_2_index(hash64(HEAP->free_list[i].a + HEAP->free_list[i].s), UINT##SIZE##_MAX); \
+        uint##SIZE##_t t_hash_ind = hash_2_index(hash64(HEAP->free_list[i].a + HEAP->free_list[i].s), UINT8_MAX); \
         HEAP->heap_free_list_cache_t[t_hash_ind] = i; \
     } \
 }

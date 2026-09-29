@@ -271,6 +271,8 @@ void dobj_pool_free(DOBJPool *pool, uint64_t pool_glb_index)
     heap->free_list = malloc(sizeof(HeapChunkHandler##handler_size) * FREE_LIST_ALLOC_COUNT); \
     heap->free_list[0] = (HeapChunkHandler##handler_size){0, 0}; \
     ARR_SIZE(&heap->free_list[0].s, UINT64_MAX, heap->mem); \
+    InitializeSRWLock(&heap->free_list_lock); \
+    heap->free_list_version = 0; \
     printf("heap inited with free list size: %u\n", heap->free_list[0].s); \
     if (prev_heap != NULL) \
     { \
@@ -330,11 +332,13 @@ void heap_init(void **heap, void *prev_heap, uint8_t heap_class)
     chunk_count = size / sizeof(HEAP->mem[0]); \
     printf("chunk_count %u\nmem size %u\n", chunk_count, sizeof(HEAP->mem)); \
     bool chunk_found = false; \
+    AcquireSRWLockExclusive(&HEAP->free_list_lock); \
     for (uint##CH_TYPE##_t i = 0; i < HEAP->free_list_count; i++) \
     { \
         HeapChunkHandler##CH_TYPE *ch = &HEAP->free_list[i]; \
         if (ch->s > chunk_count) \
         { \
+            HEAP->free_list_version++; \
             rtn_obj.heap = HEAP; \
             rtn_obj.a = ch->a; \
             ch->a += chunk_count; \
@@ -344,6 +348,7 @@ void heap_init(void **heap, void *prev_heap, uint8_t heap_class)
             break; \
         } else if (ch->s == chunk_count) \
         { \
+            HEAP->free_list_version++; \
             rtn_obj.heap = HEAP; \
             rtn_obj.a = ch->a; \
             *ch = HEAP->free_list[--HEAP->free_list_count]; \
@@ -352,6 +357,7 @@ void heap_init(void **heap, void *prev_heap, uint8_t heap_class)
             break; \
         } \
     } \
+    ReleaseSRWLockExclusive(&HEAP->free_list_lock); \
     if (!chunk_found) \
     { \
         if (HEAP->p_next == NULL) \
@@ -405,6 +411,7 @@ HeapHandler64 heap_alloc(void *heap, size_t size, uint8_t heap_class, Background
 { \
     uint##CH_TYPE##_t hash_ind_h = hash_2_index(hash64(hh.a + hh.s), UINT##CH_TYPE##_MAX); \
     uint##CH_TYPE##_t hash_ind_t = hash_2_index(hash64(hh.a), UINT##CH_TYPE##_MAX); \
+    AcquireSRWLockExclusive(&HEAP->free_list_lock); \
     HeapChunkHandler##CH_TYPE *head_chunk = &HEAP->free_list[HEAP->heap_free_list_cache_h[hash_ind_h]]; \
     HeapChunkHandler##CH_TYPE *tail_chunk = &HEAP->free_list[HEAP->heap_free_list_cache_t[hash_ind_t]]; \
     bool outdated_hashmap = (ALIAS *)w->active_target == HEAP; \
@@ -412,6 +419,7 @@ HeapHandler64 heap_alloc(void *heap, size_t size, uint8_t heap_class, Background
     bool is_tail_free = tail_chunk->a + tail_chunk->s == hh.a && !outdated_hashmap; \
     bool merge_nd = false; \
     HeapChunkHandler##CH_TYPE buffer; \
+    HEAP->free_list_version++; \
     if (is_head_free) \
     { \
         buffer = *head_chunk; \
@@ -434,12 +442,18 @@ HeapHandler64 heap_alloc(void *heap, size_t size, uint8_t heap_class, Background
     } \
     if (!is_head_free && !is_tail_free) \
     { \
+        if (HEAP->free_list_count + 1 > HEAP->free_list_alloc_count) \
+        { \
+            HEAP->free_list_alloc_count += FREE_LIST_ALLOC_COUNT; \
+            HEAP->free_list = realloc(HEAP->free_list, sizeof(HeapChunkHandler##CH_TYPE) * HEAP->free_list_alloc_count); \
+        } \
         HEAP->free_list[HEAP->free_list_count++] = (HeapChunkHandler##CH_TYPE) \
         { \
             .a = hh.a, \
             .s = hh.s \
         }; \
     } \
+    ReleaseSRWLockExclusive(&HEAP->free_list_lock); \
     queue_submit_hflo \
     ( \
         (BackgroundProcessQueueSubmitInfo) \
@@ -485,21 +499,47 @@ HeapHandler64 heap_free(HeapHandler64 hh, uint8_t heap_class, BackgroundProcessQ
         exit(1); \
     } \
     chunk_count = size / sizeof(HEAP->mem[0]); \
+    AcquireSRWLockExclusive(&HEAP->free_list_lock); \
     uint##CH_TYPE##_t after_lc_addr = hh.a + hh.s; \
-    uint##CH_TYPE##_t hash_ind = hash_2_index(hash64(after_lc_addr), UINT##CH_TYPE##_MAX); \
+    uint8_t hash_ind = hash_2_index(hash64(after_lc_addr), UINT8_MAX); \
     HeapChunkHandler##CH_TYPE *p_ch = &HEAP->free_list[HEAP->heap_free_list_cache_h[hash_ind]]; \
     HeapChunkHandler##CH_TYPE ch = *p_ch; \
     bool is_shrink = chunk_count < hh.s; \
     bool after_free_present = ch.a == after_lc_addr; \
     bool is_valid_extend = after_free_present && hh.s + ch.s >= chunk_count; \
     bool outdated_hashmap = (ALIAS *)w->active_target == HEAP; \
-    if (is_shrink && after_free_present) \
+    HEAP->free_list_version++; \
+    if (is_shrink && after_free_present && !outdated_hashmap) \
     { \
         p_ch->a = hh.a + chunk_count; \
         p_ch->s += (hh.s - chunk_count); \
+        ReleaseSRWLockExclusive(&HEAP->free_list_lock); \
         queue_submit_hflo \
         ( \
-        (BackgroundProcessQueueSubmitInfo) \
+            (BackgroundProcessQueueSubmitInfo) \
+            { \
+                .class = heap_class, \
+                .p_target = HEAP, \
+                .p_queue = queue \
+            } \
+        ); \
+        return rtn_obj; \
+    } else if (is_shrink && !after_free_present) \
+    { \
+        if (HEAP->free_list_count + 1 > HEAP->free_list_alloc_count) \
+        { \
+            HEAP->free_list_alloc_count += FREE_LIST_ALLOC_COUNT; \
+            HEAP->free_list = realloc(HEAP->free_list, sizeof(HeapChunkHandler##CH_TYPE) * HEAP->free_list_alloc_count); \
+        } \
+        HEAP->free_list[HEAP->free_list_count++] = (HeapChunkHandler##CH_TYPE)\
+        { \
+            .a = hh.a + chunk_count, \
+            .s = hh.s - chunk_count \
+        }; \
+        ReleaseSRWLockExclusive(&HEAP->free_list_lock); \
+        queue_submit_hflo \
+        ( \
+            (BackgroundProcessQueueSubmitInfo) \
             { \
                 .class = heap_class, \
                 .p_target = HEAP, \
@@ -517,6 +557,7 @@ HeapHandler64 heap_free(HeapHandler64 hh, uint8_t heap_class, BackgroundProcessQ
             p_ch->a += offset; \
             p_ch->s -= offset; \
         } \
+        ReleaseSRWLockExclusive(&HEAP->free_list_lock); \
         queue_submit_hflo \
         ( \
             (BackgroundProcessQueueSubmitInfo) \
@@ -547,6 +588,7 @@ HeapHandler64 heap_free(HeapHandler64 hh, uint8_t heap_class, BackgroundProcessQ
                 break; \
             } \
         } \
+        ReleaseSRWLockExclusive(&HEAP->free_list_lock); \
         if (!chunk_found) \
         { \
             if (HEAP->p_next == NULL) \

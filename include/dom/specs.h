@@ -143,8 +143,8 @@ typedef struct {
     uint16_t free_list_count;
     SRWLOCK free_list_lock;
     uint64_t free_list_version;
-    uint16_t heap_free_list_cache_h[256];
-    uint16_t heap_free_list_cache_t[256];
+    uint16_t heap_free_list_cache_h[256]; //hashed head local address of the more significant free chunk
+    uint16_t heap_free_list_cache_t[256]; //hashed tail local address of the less significant free chunk
 
     uint16_t mem[HEAP_SIZE / 2]; //size: 64KB, page size: 2B, minimum allocatable chunk is sizeof(mem) / (UINT16_MAX + 1) = 2B
 } Heap;

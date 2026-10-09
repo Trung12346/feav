@@ -17,7 +17,7 @@ typedef struct
     int gpu_select_flag;
     DOBJPool *pool;
     Heap *heap;
-    BackgroundProcessQueue hflo_queue;
+    BackgroundProcessHFLOqueue hflo_queue;
 } App;
 App app_no_args_construct()
 {

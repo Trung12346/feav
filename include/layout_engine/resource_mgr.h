@@ -1,15 +1,7 @@
 #include <stdint.h>
 #include <windows.h>
+#include "background_worker/specs.h"
 
-typedef struct {
-    uint16_t thread;
-    uint16_t core;
-} PhysicalDeviceThreadInformation;
-typedef struct {
-    uint16_t logical_core_count;
-    uint16_t physical_core_count;
-    PhysicalDeviceThreadInformation physical_device_core_n_thread_relationship[512];
-} WorkersProperties;
 
 void WorkersGetProperties(WorkersProperties *wp)
 {
@@ -60,5 +52,4 @@ void WorkersGetProperties(WorkersProperties *wp)
     free(info);
     wp->logical_core_count = count;
     wp->physical_core_count = physical_core;
-
 }

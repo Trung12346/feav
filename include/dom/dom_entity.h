@@ -18,65 +18,65 @@ uint8_t tag_name_resolver(char *name)
     switch (len)
     {
         case 3:
-            if (strcmp(name, "div") == 0) return 9;
-            else if (strcmp(name, "nav") == 0) return 39;
-            else if (strcmp(name, "img") == 0) return 20;
-            else if (strcmp(name, "svg") == 0) return 49;
-            else if (strcmp(name, "sup") == 0) return 63;
-            else if (strcmp(name, "sub") == 0) return 62;
-            else if (strcmp(name, "pre") == 0) return 53;
+            if (strcmp(name, "div") == 0) return DIV;
+            else if (strcmp(name, "nav") == 0) return NAV;
+            else if (strcmp(name, "img") == 0) return IMG;
+            else if (strcmp(name, "svg") == 0) return SVG;
+            else if (strcmp(name, "sup") == 0) return SUP;
+            else if (strcmp(name, "sub") == 0) return SUB;
+            else if (strcmp(name, "pre") == 0) return PRE;
             break;
         case 1:
             switch (name0)
             {
-                case 'p': return 10;
-                case 'a': return 19;
-                case 'b': return 58;
-                case 'i': return 59;
-                case 'u': return 60;
+                case 'p': return P;
+                case 'a': return A;
+                case 'b': return B;
+                case 'i': return I;
+                case 'u': return U;
             }
             break;
         case 2:
-            if (strcmp(name, "li") == 0) return 23;
-            else if (strcmp(name, "td") == 0) return 30;
-            else if (strcmp(name, "br") == 0) return 11;
-            else if (strcmp(name, "tr") == 0) return 28;
-            else if (strcmp(name, "th") == 0) return 29;
-            else if (strcmp(name, "ul") == 0) return 21;
-            else if (strcmp(name, "ol") == 0) return 22;
-            else if (strcmp(name, "em") == 0) return 57;
-            else if (strcmp(name, "hr") == 0) return 12;
+            if (strcmp(name, "li") == 0) return LI;
+            else if (strcmp(name, "td") == 0) return TD;
+            else if (strcmp(name, "br") == 0) return BR;
+            else if (strcmp(name, "tr") == 0) return TR;
+            else if (strcmp(name, "th") == 0) return TH;
+            else if (strcmp(name, "ul") == 0) return UL;
+            else if (strcmp(name, "ol") == 0) return OL;
+            else if (strcmp(name, "em") == 0) return EM;
+            else if (strcmp(name, "hr") == 0) return HR;
             break;
         case 4:
-            if (strcmp(name, "body") == 0) return 3;
-            else if (strcmp(name, "link") == 0) return 5;
-            else if (strcmp(name, "meta") == 0) return 8;
-            else if (strcmp(name, "form") == 0) return 31;
-            else if (strcmp(name, "main") == 0) return 40;
-            else if (strcmp(name, "code") == 0) return 54;
+            if (strcmp(name, "body") == 0) return BODY;
+            else if (strcmp(name, "link") == 0) return LINK;
+            else if (strcmp(name, "meta") == 0) return META;
+            else if (strcmp(name, "form") == 0) return FORM;
+            else if (strcmp(name, "main") == 0) return MAIN;
+            else if (strcmp(name, "code") == 0) return CODE;
             break;
         case 5:
-            if (strcmp(name, "input") == 0) return 32;
-            else if (strcmp(name, "label") == 0) return 37;
-            else if (strcmp(name, "aside") == 0) return 43;
-            else if (strcmp(name, "style") == 0) return 6;
-            else if (strcmp(name, "video") == 0) return 45;
-            else if (strcmp(name, "audio") == 0) return 46;
-            else if (strcmp(name, "small") == 0) return 61;
+            if (strcmp(name, "input") == 0) return DINPUT;
+            else if (strcmp(name, "label") == 0) return LABEL;
+            else if (strcmp(name, "aside") == 0) return ASIDE;
+            else if (strcmp(name, "style") == 0) return STYLE;
+            else if (strcmp(name, "video") == 0) return VIDEO;
+            else if (strcmp(name, "audio") == 0) return AUDIO;
+            else if (strcmp(name, "small") == 0) return SMALL;
             break;
         case 6:
-            if (strcmp(name, "script") == 0) return 7;
-            else if (strcmp(name, "button") == 0) return 34;
-            else if (strcmp(name, "select") == 0) return 35;
-            else if (strcmp(name, "option") == 0) return 36;
-            else if (strcmp(name, "footer") == 0) return 44;
-            else if (strcmp(name, "strong") == 0) return 56;
-            else if (strcmp(name, "source") == 0) return 47;
-            else if (strcmp(name, "canvas") == 0) return 48;
+            if (strcmp(name, "script") == 0) return SCRIPT;
+            else if (strcmp(name, "button") == 0) return BUTTON;
+            else if (strcmp(name, "select") == 0) return SELECT;
+            else if (strcmp(name, "option") == 0) return OPTION;
+            else if (strcmp(name, "footer") == 0) return FOOTER;
+            else if (strcmp(name, "strong") == 0) return STRONG;
+            else if (strcmp(name, "source") == 0) return SOURCE;
+            else if (strcmp(name, "canvas") == 0) return CANVAS;
             break;
         case 7:
-            if (strcmp(name, "section") == 0) return 41;
-            else if (strcmp(name, "article") == 0) return 42;
+            if (strcmp(name, "section") == 0) return SECTION;
+            else if (strcmp(name, "article") == 0) return ARTICLE;
             break;
     }
     switch (name0) {
@@ -84,31 +84,31 @@ uint8_t tag_name_resolver(char *name)
             if (len == 2) {
                 switch (name[1])
                 {
-                    case '1': return 13U;
-                    case '2': return 14U;
-                    case '3': return 15U;
-                    case '4': return 16U;
-                    case '5': return 17U;
-                    case '6': return 18U;
+                    case '1': return H1;
+                    case '2': return H2;
+                    case '3': return H3;
+                    case '4': return H4;
+                    case '5': return H5;
+                    case '6': return H6;
                 }
             }
-            if (strcmp(name, "header") == 0) return 38;
-            else if (strcmp(name, "head") == 0) return 2;
-            else if (strcmp(name, "html") == 0) return 1;
+            if (strcmp(name, "header") == 0) return HEADER;
+            else if (strcmp(name, "head") == 0) return HEAD;
+            else if (strcmp(name, "html") == 0) return HTML;
             break;
         case 't':
-            if (strcmp(name, "tbody") == 0) return 26;
-            else if (strcmp(name, "thead") == 0) return 25;
-            else if (strcmp(name, "table") == 0) return 24;
-            else if (strcmp(name, "textarea") == 0) return 33;
-            else if (strcmp(name, "title") == 0) return 4;
-            else if (strcmp(name, "tfoot") == 0) return 27;
+            if (strcmp(name, "tbody") == 0) return TBODY;
+            else if (strcmp(name, "thead") == 0) return THEAD;
+            else if (strcmp(name, "table") == 0) return TABLE;
+            else if (strcmp(name, "textarea") == 0) return TEXTAREA;
+            else if (strcmp(name, "title") == 0) return TITLE;
+            else if (strcmp(name, "tfoot") == 0) return TFOOT;
             break;
     }
-    if (strcmp(name, "blockquote") == 0) return 55;
-    else if (strcmp(name, "details") == 0) return 50;
-    else if (strcmp(name, "iframe") == 0) return 52;
-    else if (strcmp(name, "summary") == 0) return 51;
+    if (strcmp(name, "blockquote") == 0) return BLOCKQUOTE;
+    else if (strcmp(name, "details") == 0) return DETAILS;
+    else if (strcmp(name, "iframe") == 0) return IFRAME;
+    else if (strcmp(name, "summary") == 0) return SUMMARY;
     return 0;
 }
 
@@ -372,7 +372,7 @@ void heap_init(void **heap, void *prev_heap, uint8_t heap_class)
     } \
     queue_submit_hflo \
     ( \
-        (BackgroundProcessQueueSubmitInfo) \
+        (BackgroundProcessHFLOqueueSubmitInfo) \
         { \
             .class = heap_class, \
             .p_target = HEAP, \
@@ -380,7 +380,7 @@ void heap_init(void **heap, void *prev_heap, uint8_t heap_class)
         } \
     ); \
 }
-HeapHandler64 heap_alloc(void *heap, size_t size, uint8_t heap_class, BackgroundProcessQueue *queue)
+HeapHandler64 heap_alloc(void *heap, size_t size, uint8_t heap_class, BackgroundProcessHFLOqueue *queue)
 {
     HeapHandler64 rtn_obj = {0};
 
@@ -456,7 +456,7 @@ HeapHandler64 heap_alloc(void *heap, size_t size, uint8_t heap_class, Background
     ReleaseSRWLockExclusive(&HEAP->free_list_lock); \
     queue_submit_hflo \
     ( \
-        (BackgroundProcessQueueSubmitInfo) \
+        (BackgroundProcessHFLOqueueSubmitInfo) \
         { \
             .p_queue = queue, \
             .p_target = HEAP, \
@@ -465,7 +465,7 @@ HeapHandler64 heap_alloc(void *heap, size_t size, uint8_t heap_class, Background
     ); \
 }
 
-void heap_free(HeapHandler64 hh, uint8_t heap_class, BackgroundProcessQueue *queue)
+void heap_free(HeapHandler64 hh, uint8_t heap_class, BackgroundProcessHFLOqueue *queue)
 {
     Worker *w = &queue->worker;
     switch (heap_class)
@@ -519,7 +519,7 @@ void heap_free(HeapHandler64 hh, uint8_t heap_class, BackgroundProcessQueue *que
         ReleaseSRWLockExclusive(&HEAP->free_list_lock); \
         queue_submit_hflo \
         ( \
-            (BackgroundProcessQueueSubmitInfo) \
+            (BackgroundProcessHFLOqueueSubmitInfo) \
             { \
                 .class = heap_class, \
                 .p_target = HEAP, \
@@ -542,7 +542,7 @@ void heap_free(HeapHandler64 hh, uint8_t heap_class, BackgroundProcessQueue *que
         ReleaseSRWLockExclusive(&HEAP->free_list_lock); \
         queue_submit_hflo \
         ( \
-            (BackgroundProcessQueueSubmitInfo) \
+            (BackgroundProcessHFLOqueueSubmitInfo) \
             { \
                 .class = heap_class, \
                 .p_target = HEAP, \
@@ -563,7 +563,7 @@ void heap_free(HeapHandler64 hh, uint8_t heap_class, BackgroundProcessQueue *que
         ReleaseSRWLockExclusive(&HEAP->free_list_lock); \
         queue_submit_hflo \
         ( \
-            (BackgroundProcessQueueSubmitInfo) \
+            (BackgroundProcessHFLOqueueSubmitInfo) \
             { \
                 .class = heap_class, \
                 .p_target = HEAP, \
@@ -608,7 +608,7 @@ void heap_free(HeapHandler64 hh, uint8_t heap_class, BackgroundProcessQueue *que
     } \
 }
 
-HeapHandler64 heap_realloc(HeapHandler64 hh, size_t size, uint8_t heap_class, BackgroundProcessQueue *queue)
+HeapHandler64 heap_realloc(HeapHandler64 hh, size_t size, uint8_t heap_class, BackgroundProcessHFLOqueue *queue)
 {
     if (hh.s == size) return hh;
     HeapHandler64 rtn_obj = hh;

@@ -13,11 +13,6 @@
 #include <string.h>
 #include <stdio.h>
 
-Worker worker_create()
-{
-    return (Worker){.work = 0, .active_target = NULL, .event = CreateEvent(NULL, FALSE, FALSE, NULL)};
-}
-
 #define HCH_INSERTION_THRESHOLD 32
 
 /* ---- Macro template: generates all functions for a given type ---- */
@@ -134,7 +129,7 @@ DEFINE_MERGE_SORT(64, HeapChunkHandler64)
 
 DWORD WINAPI heap_free_list_organizer(void *arg)
 {
-    BackgroundProcessQueue *queue = (BackgroundProcessQueue *)arg;
+    BackgroundProcessHFLOqueue *queue = (BackgroundProcessHFLOqueue *)arg;
     Worker *w = &queue->worker;
     for (;;)
     {
@@ -178,10 +173,10 @@ DWORD WINAPI heap_free_list_organizer(void *arg)
 
     return 0;
 }
-void queue_submit_hflo(BackgroundProcessQueueSubmitInfo info)
+void queue_submit_hflo(BackgroundProcessHFLOqueueSubmitInfo info)
 {
     Worker *w = &info.p_queue->worker;
-    BackgroundProcessQueue *queue = info.p_queue;
+    BackgroundProcessHFLOqueue *queue = info.p_queue;
     atomic_store(&w->work, 1);
     atomic_fetch_add(&queue->queue_submit_index, 1);
     if (queue->queue_submit_index == queue->queue_worker_index)
@@ -194,9 +189,5 @@ void queue_submit_hflo(BackgroundProcessQueueSubmitInfo info)
     SetEvent(w->event);
 }
 //future note: steal vulkan queue so worker is capable of handling awaiting requests appropriately too
-void terminate(Worker *w)
-{
-    atomic_store(&w->terminate, true);
-    SetEvent(w->event);
-}
+
 #endif

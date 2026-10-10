@@ -229,7 +229,7 @@ uint64_t dobj_pool_alloc(DOBJ obj, DOBJPool *pool)
     working_pool->attr_sizes[working_index] = obj.attr_size;
     working_pool->p_inner[working_index] = obj.p_inner;
     working_pool->inner_size[working_index] = obj.inner_size;
-    working_pool->p_parent[working_index] = obj.p_parent;
+    working_pool->parent[working_index] = obj.p_parent;
     working_pool->life_span_points[working_index] = obj.life_span_point;
 
     return working_pool->pool_index * POOL_ELEMENT_COUNT + working_index;

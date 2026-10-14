@@ -10,6 +10,10 @@
 #define VIEW_PORT_WIDTH 1000
 #define VIEW_PORT_HEIGHT 760
 
+typedef struct {
+    CSSattribute *ca; //"runtime-enum", enum configuration is dependent on hashing algorithm 
+} AppCaches;
+
 typedef struct
 {
     GLFWwindow *window;
@@ -18,6 +22,8 @@ typedef struct
     DOBJPool *pool;
     Heap *heap;
     BackgroundProcessHFLOqueue hflo_queue;
+
+    AppCaches caches;
 } App;
 App app_no_args_construct()
 {
@@ -125,6 +131,16 @@ static void clean_up(App *app)
     vulkan_destroy(&app->vk_process);
     glfwDestroyWindow(app->window);
     glfwTerminate();
+}
+static void resource_init(App *app)
+{
+    size_t size;
+    void *buffer;
+
+    if (size == 0)
+    {
+        //create hashmap for css atribute
+    }
 }
 
 void run(App *app)

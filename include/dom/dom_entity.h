@@ -11,7 +11,7 @@
 #include "dom/specs.h"
 #include "hardware_utils/hash.h"
 
-uint8_t tag_name_resolver(char *name)
+uint8_t tag_name_resolver(const char *name)
 {
     char name0 = name[0];
     uint8_t len = strlen(name);
@@ -114,7 +114,7 @@ uint8_t tag_name_resolver(char *name)
 
 void pool_init(DOBJPool **pool, DOBJPool *prev_pool) //latest pool must be passed in
 {
-    *pool = malloc(sizeof(DOBJPool));
+    *pool = calloc(1, sizeof(DOBJPool));
 
     (*pool)->live_objects = 0;
 
@@ -207,7 +207,7 @@ uint16_t available_pool_region_search(DOBJPool *pool, bool *free_found)
     }
     return 0;
 }
-uint64_t dobj_pool_alloc(DOBJ obj, DOBJPool *pool)
+DOBJHandler dobj_pool_alloc(DOBJ *obj, DOBJPool *pool)
 {
     bool free_found = false;
     DOBJPool *working_pool = pool;
@@ -223,16 +223,26 @@ uint64_t dobj_pool_alloc(DOBJ obj, DOBJPool *pool)
     }
     working_pool->live_objects++;
     working_pool->status_flags[working_index] |= POOL_STATUS_IS_OCCUPIED_BIT;
-    strcpy(working_pool->tag_names[working_index], obj.tag_name);
-    working_pool->tag_ids[working_index] = obj.tag_id;
-    working_pool->p_attrs[working_index] = obj.p_attr;
-    working_pool->attr_sizes[working_index] = obj.attr_size;
-    working_pool->p_inner[working_index] = obj.p_inner;
-    working_pool->inner_size[working_index] = obj.inner_size;
-    working_pool->parent[working_index] = obj.p_parent;
-    working_pool->life_span_points[working_index] = obj.life_span_point;
+    strcpy(working_pool->tag_names[working_index], obj->tag_name);
+    working_pool->tag_ids[working_index] = obj->tag_id;
+    working_pool->p_attrs[working_index] = obj->p_attr;
+    working_pool->attr_sizes[working_index] = obj->attr_size;
+    working_pool->p_inner[working_index] = obj->p_inner;
+    working_pool->parent[working_index] = obj->p_parent;
+    working_pool->child_count[working_index] = obj->child_count;
+    working_pool->life_span_points[working_index] = obj->life_span_point;
 
-    return working_pool->pool_index * POOL_ELEMENT_COUNT + working_index;
+    working_pool->position[working_index] = obj->position;
+    working_pool->x[working_index] = obj->x;
+    working_pool->y[working_index] = obj->y;
+    working_pool->width[working_index] = obj->width;
+    working_pool->height[working_index] = obj->height;
+
+    working_pool->padding[working_index] = obj->padding;
+    working_pool->margin[working_index] = obj->margin;
+
+    // return working_pool->pool_index * POOL_ELEMENT_COUNT + working_index;
+    return (DOBJHandler){.pool = working_pool, .item_index = working_index};
 }
 
 void dobj_pool_update(DOBJ obj, DOBJPool *pool, uint64_t glb_index, uint16_t opt_flags)
@@ -249,18 +259,51 @@ void dobj_pool_update(DOBJ obj, DOBJPool *pool, uint64_t glb_index, uint16_t opt
 void dobj_pool_free(DOBJPool *pool, uint64_t pool_glb_index)
 {
     DOBJHandler obj = pool_search(pool, pool_glb_index);
+    pool = obj.pool;
 
-    if (obj.pool->status_flags[obj.item_index] & POOL_STATUS_IS_OCCUPIED_BIT)
+    if (pool->status_flags[obj.item_index] & POOL_STATUS_IS_OCCUPIED_BIT)
     {
-        obj.pool->status_flags[obj.item_index] &= ~POOL_STATUS_IS_OCCUPIED_BIT;
+        pool->status_flags[obj.item_index] &= ~POOL_STATUS_IS_OCCUPIED_BIT;
         pool->live_objects--;
         DOBJPool *p_pool_next = (DOBJPool *)pool->p_next;
-        if ((pool->live_objects < POOL_ELEMENT_COUNT / 2) && p_pool_next != NULL && p_pool_next->live_objects == 0 && p_pool_next->p_prev == NULL)
+        if ((pool->live_objects < POOL_ELEMENT_COUNT / 2) && p_pool_next != NULL && p_pool_next->live_objects == 0 && p_pool_next->p_next == NULL)
         {
             free((DOBJPool *)pool->p_next);
             pool->p_next = NULL;
         }
     }
+}
+
+void static inline dobj_pool_advance(DOBJHandler *handler)
+{
+    if (handler->item_index == POOL_ELEMENT_COUNT - 1)
+    {
+        handler->item_index = 0;
+        if (handler->pool->p_next == NULL)
+        {
+            printf(ERR SYS_DBG_PREFIX" Segmentation fault, invalid pool access");
+            exit(1);
+        }
+        handler->pool = handler->pool->p_next;
+        return;
+    }
+    handler->item_index++;
+}
+
+void static inline dobj_pool_retard(DOBJHandler *handler)
+{
+    if (handler->item_index == 0)
+    {
+        handler->item_index = POOL_ELEMENT_COUNT - 1;
+        if (handler->pool->p_prev == NULL)
+        {
+            printf(ERR SYS_DBG_PREFIX" Segmentation fault, invalid pool access");
+            exit(1);
+        }
+        handler->pool = handler->pool->p_prev;
+        return;
+    }
+    handler->item_index--;
 }
 
 #define HEAP_INIT(heap, prev_heap, handler_size) \
@@ -412,8 +455,8 @@ HeapHandler64 heap_alloc(void *heap, size_t size, uint8_t heap_class, Background
 #define HEAP_FREE(HEAP, ALIAS, CH_TYPE) \
 { \
     size_t chunk_size = hh.s / sizeof(HEAP->mem[0]); \
-    uint8_t hash_ind_h = hash_2_index(hash64(hh.a + chunk_size), UINT8_MAX); \
-    uint8_t hash_ind_t = hash_2_index(hash64(hh.a), UINT8_MAX); \
+    uint8_t hash_ind_h = hash_2_index(hash64(hh.a + chunk_size, NO_SEED), UINT8_MAX); \
+    uint8_t hash_ind_t = hash_2_index(hash64(hh.a, NO_SEED), UINT8_MAX); \
     AcquireSRWLockExclusive(&HEAP->free_list_lock); \
     HeapChunkHandler##CH_TYPE *head_chunk = &HEAP->free_list[HEAP->heap_free_list_cache_h[hash_ind_h]]; \
     HeapChunkHandler##CH_TYPE *tail_chunk = &HEAP->free_list[HEAP->heap_free_list_cache_t[hash_ind_t]]; \
@@ -504,7 +547,7 @@ void heap_free(HeapHandler64 hh, uint8_t heap_class, BackgroundProcessHFLOqueue 
     chunk_count = size / sizeof(HEAP->mem[0]); \
     AcquireSRWLockExclusive(&HEAP->free_list_lock); \
     uint##CH_TYPE##_t after_lc_addr = hh.a + hh.s; \
-    uint8_t hash_ind = hash_2_index(hash64(after_lc_addr), UINT8_MAX); \
+    uint8_t hash_ind = hash_2_index(hash64(after_lc_addr, NO_SEED), UINT8_MAX); \
     HeapChunkHandler##CH_TYPE *p_ch = &HEAP->free_list[HEAP->heap_free_list_cache_h[hash_ind]]; \
     HeapChunkHandler##CH_TYPE ch = *p_ch; \
     bool is_shrink = chunk_count < hh.s; \

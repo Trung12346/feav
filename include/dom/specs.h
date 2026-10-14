@@ -112,7 +112,7 @@ typedef enum {
     SUP         = 63
 } TagIdentifier;
 
-typedef enum {
+enum {
     /* Margin */
     CSS_MARGIN_TOP = 1,
     CSS_MARGIN_RIGHT,
@@ -384,8 +384,249 @@ typedef enum {
     CSS_WIDOWS,
  
     CSS_ATTRIBUTE_COUNT /* number of attributes + 1 (last valid value is COUNT - 1) */
-} CSSAttribute; //claude helped with tis
+}; //claude helped with tis
 
+typedef struct {
+    uint16_t CSS_MARGIN_TOP;
+    uint16_t CSS_MARGIN_RIGHT;
+    uint16_t CSS_MARGIN_BOTTOM;
+    uint16_t CSS_MARGIN_LEFT;
+
+    uint16_t CSS_PADDING_TOP;
+    uint16_t CSS_PADDING_RIGHT;
+    uint16_t CSS_PADDING_BOTTOM;
+    uint16_t CSS_PADDING_LEFT;
+
+    uint16_t CSS_BORDER_TOP_WIDTH;
+    uint16_t CSS_BORDER_RIGHT_WIDTH;
+    uint16_t CSS_BORDER_BOTTOM_WIDTH;
+    uint16_t CSS_BORDER_LEFT_WIDTH;
+
+    uint16_t CSS_BORDER_TOP_STYLE;
+    uint16_t CSS_BORDER_RIGHT_STYLE;
+    uint16_t CSS_BORDER_BOTTOM_STYLE;
+    uint16_t CSS_BORDER_LEFT_STYLE;
+
+    uint16_t CSS_BORDER_TOP_COLOR;
+    uint16_t CSS_BORDER_RIGHT_COLOR;
+    uint16_t CSS_BORDER_BOTTOM_COLOR;
+    uint16_t CSS_BORDER_LEFT_COLOR;
+
+    uint16_t CSS_BORDER_TOP_LEFT_RADIUS;
+    uint16_t CSS_BORDER_TOP_RIGHT_RADIUS;
+    uint16_t CSS_BORDER_BOTTOM_RIGHT_RADIUS;
+    uint16_t CSS_BORDER_BOTTOM_LEFT_RADIUS;
+
+    uint16_t CSS_BORDER_COLLAPSE;
+    uint16_t CSS_BORDER_SPACING;
+
+    uint16_t CSS_BORDER_IMAGE_SOURCE;
+    uint16_t CSS_BORDER_IMAGE_SLICE;
+    uint16_t CSS_BORDER_IMAGE_WIDTH;
+    uint16_t CSS_BORDER_IMAGE_OUTSET;
+    uint16_t CSS_BORDER_IMAGE_REPEAT;
+
+    uint16_t CSS_OUTLINE_COLOR;
+    uint16_t CSS_OUTLINE_STYLE;
+    uint16_t CSS_OUTLINE_WIDTH;
+    uint16_t CSS_OUTLINE_OFFSET;
+
+    uint16_t CSS_WIDTH;
+    uint16_t CSS_MIN_WIDTH;
+    uint16_t CSS_MAX_WIDTH;
+    uint16_t CSS_HEIGHT;
+    uint16_t CSS_MIN_HEIGHT;
+    uint16_t CSS_MAX_HEIGHT;
+    uint16_t CSS_BOX_SIZING;
+    uint16_t CSS_ASPECT_RATIO;
+
+    uint16_t CSS_POSITION;
+    uint16_t CSS_TOP;
+    uint16_t CSS_RIGHT;
+    uint16_t CSS_BOTTOM;
+    uint16_t CSS_LEFT;
+    uint16_t CSS_Z_INDEX;
+    uint16_t CSS_FLOAT;
+    uint16_t CSS_CLEAR;
+
+    uint16_t CSS_DISPLAY;
+    uint16_t CSS_VISIBILITY;
+    uint16_t CSS_OPACITY;
+    uint16_t CSS_OVERFLOW_X;
+    uint16_t CSS_OVERFLOW_Y;
+    uint16_t CSS_CLIP;
+    uint16_t CSS_CLIP_PATH;
+    uint16_t CSS_OBJECT_FIT;
+    uint16_t CSS_OBJECT_POSITION;
+
+    uint16_t CSS_BACKGROUND_COLOR;
+    uint16_t CSS_BACKGROUND_IMAGE;
+    uint16_t CSS_BACKGROUND_REPEAT;
+    uint16_t CSS_BACKGROUND_POSITION_X;
+    uint16_t CSS_BACKGROUND_POSITION_Y;
+    uint16_t CSS_BACKGROUND_SIZE;
+    uint16_t CSS_BACKGROUND_ATTACHMENT;
+    uint16_t CSS_BACKGROUND_ORIGIN;
+    uint16_t CSS_BACKGROUND_CLIP;
+    uint16_t CSS_BACKGROUND_BLEND_MODE;
+
+    uint16_t CSS_COLOR;
+
+    uint16_t CSS_FONT_FAMILY;
+    uint16_t CSS_FONT_SIZE;
+    uint16_t CSS_FONT_STYLE;
+    uint16_t CSS_FONT_WEIGHT;
+    uint16_t CSS_FONT_VARIANT;
+    uint16_t CSS_FONT_STRETCH;
+    uint16_t CSS_FONT_SIZE_ADJUST;
+    uint16_t CSS_FONT_KERNING;
+    uint16_t CSS_FONT_FEATURE_SETTINGS;
+    uint16_t CSS_FONT_VARIATION_SETTINGS;
+    uint16_t CSS_LINE_HEIGHT;
+
+    uint16_t CSS_TEXT_ALIGN;
+    uint16_t CSS_TEXT_ALIGN_LAST;
+    uint16_t CSS_TEXT_INDENT;
+    uint16_t CSS_TEXT_TRANSFORM;
+    uint16_t CSS_TEXT_OVERFLOW;
+    uint16_t CSS_TEXT_SHADOW;
+    uint16_t CSS_TEXT_JUSTIFY;
+    uint16_t CSS_TEXT_DECORATION_LINE;
+    uint16_t CSS_TEXT_DECORATION_STYLE;
+    uint16_t CSS_TEXT_DECORATION_COLOR;
+    uint16_t CSS_TEXT_DECORATION_THICKNESS;
+    uint16_t CSS_TEXT_UNDERLINE_OFFSET;
+    uint16_t CSS_LETTER_SPACING;
+    uint16_t CSS_WORD_SPACING;
+    uint16_t CSS_WHITE_SPACE;
+    uint16_t CSS_WORD_BREAK;
+    uint16_t CSS_WORD_WRAP;
+    uint16_t CSS_OVERFLOW_WRAP;
+    uint16_t CSS_HYPHENS;
+    uint16_t CSS_TAB_SIZE;
+    uint16_t CSS_DIRECTION;
+    uint16_t CSS_UNICODE_BIDI;
+    uint16_t CSS_WRITING_MODE;
+    uint16_t CSS_VERTICAL_ALIGN;
+
+    uint16_t CSS_FLEX_DIRECTION;
+    uint16_t CSS_FLEX_WRAP;
+    uint16_t CSS_FLEX_GROW;
+    uint16_t CSS_FLEX_SHRINK;
+    uint16_t CSS_FLEX_BASIS;
+    uint16_t CSS_ORDER;
+    uint16_t CSS_JUSTIFY_CONTENT;
+    uint16_t CSS_JUSTIFY_ITEMS;
+    uint16_t CSS_JUSTIFY_SELF;
+    uint16_t CSS_ALIGN_CONTENT;
+    uint16_t CSS_ALIGN_ITEMS;
+    uint16_t CSS_ALIGN_SELF;
+    uint16_t CSS_ROW_GAP;
+    uint16_t CSS_COLUMN_GAP;
+
+    uint16_t CSS_GRID_TEMPLATE_COLUMNS;
+    uint16_t CSS_GRID_TEMPLATE_ROWS;
+    uint16_t CSS_GRID_TEMPLATE_AREAS;
+    uint16_t CSS_GRID_AUTO_COLUMNS;
+    uint16_t CSS_GRID_AUTO_ROWS;
+    uint16_t CSS_GRID_AUTO_FLOW;
+    uint16_t CSS_GRID_ROW_START;
+    uint16_t CSS_GRID_ROW_END;
+    uint16_t CSS_GRID_COLUMN_START;
+    uint16_t CSS_GRID_COLUMN_END;
+
+    uint16_t CSS_COLUMN_COUNT;
+    uint16_t CSS_COLUMN_WIDTH;
+    uint16_t CSS_COLUMN_FILL;
+    uint16_t CSS_COLUMN_SPAN;
+    uint16_t CSS_COLUMN_RULE_WIDTH;
+    uint16_t CSS_COLUMN_RULE_STYLE;
+    uint16_t CSS_COLUMN_RULE_COLOR;
+
+    uint16_t CSS_LIST_STYLE_TYPE;
+    uint16_t CSS_LIST_STYLE_POSITION;
+    uint16_t CSS_LIST_STYLE_IMAGE;
+
+    uint16_t CSS_TABLE_LAYOUT;
+    uint16_t CSS_CAPTION_SIDE;
+    uint16_t CSS_EMPTY_CELLS;
+
+    uint16_t CSS_CONTENT;
+    uint16_t CSS_QUOTES;
+    uint16_t CSS_COUNTER_RESET;
+    uint16_t CSS_COUNTER_INCREMENT;
+
+    uint16_t CSS_TRANSFORM;
+    uint16_t CSS_TRANSFORM_ORIGIN;
+    uint16_t CSS_TRANSFORM_STYLE;
+    uint16_t CSS_PERSPECTIVE;
+    uint16_t CSS_PERSPECTIVE_ORIGIN;
+    uint16_t CSS_BACKFACE_VISIBILITY;
+    uint16_t CSS_TRANSLATE;
+    uint16_t CSS_ROTATE;
+    uint16_t CSS_SCALE;
+
+    uint16_t CSS_TRANSITION_PROPERTY;
+    uint16_t CSS_TRANSITION_DURATION;
+    uint16_t CSS_TRANSITION_TIMING_FUNCTION;
+    uint16_t CSS_TRANSITION_DELAY;
+
+    uint16_t CSS_ANIMATION_NAME;
+    uint16_t CSS_ANIMATION_DURATION;
+    uint16_t CSS_ANIMATION_TIMING_FUNCTION;
+    uint16_t CSS_ANIMATION_DELAY;
+    uint16_t CSS_ANIMATION_ITERATION_COUNT;
+    uint16_t CSS_ANIMATION_DIRECTION;
+    uint16_t CSS_ANIMATION_FILL_MODE;
+    uint16_t CSS_ANIMATION_PLAY_STATE;
+
+    uint16_t CSS_BOX_SHADOW;
+    uint16_t CSS_FILTER;
+    uint16_t CSS_BACKDROP_FILTER;
+    uint16_t CSS_MIX_BLEND_MODE;
+    uint16_t CSS_ISOLATION;
+
+    uint16_t CSS_MASK_IMAGE;
+    uint16_t CSS_MASK_MODE;
+    uint16_t CSS_MASK_REPEAT;
+    uint16_t CSS_MASK_POSITION;
+    uint16_t CSS_MASK_SIZE;
+    uint16_t CSS_MASK_ORIGIN;
+    uint16_t CSS_MASK_CLIP;
+    uint16_t CSS_MASK_COMPOSITE;
+
+    uint16_t CSS_SCROLL_BEHAVIOR;
+    uint16_t CSS_SCROLL_SNAP_TYPE;
+    uint16_t CSS_SCROLL_SNAP_ALIGN;
+    uint16_t CSS_SCROLL_MARGIN_TOP;
+    uint16_t CSS_SCROLL_MARGIN_RIGHT;
+    uint16_t CSS_SCROLL_MARGIN_BOTTOM;
+    uint16_t CSS_SCROLL_MARGIN_LEFT;
+    uint16_t CSS_SCROLL_PADDING_TOP;
+    uint16_t CSS_SCROLL_PADDING_RIGHT;
+    uint16_t CSS_SCROLL_PADDING_BOTTOM;
+    uint16_t CSS_SCROLL_PADDING_LEFT;
+    uint16_t CSS_OVERSCROLL_BEHAVIOR_X;
+    uint16_t CSS_OVERSCROLL_BEHAVIOR_Y;
+
+    uint16_t CSS_CURSOR;
+    uint16_t CSS_POINTER_EVENTS;
+    uint16_t CSS_USER_SELECT;
+    uint16_t CSS_RESIZE;
+    uint16_t CSS_TOUCH_ACTION;
+    uint16_t CSS_CARET_COLOR;
+    uint16_t CSS_ACCENT_COLOR;
+    uint16_t CSS_APPEARANCE;
+
+    uint16_t CSS_WILL_CHANGE;
+    uint16_t CSS_CONTAIN;
+    uint16_t CSS_IMAGE_RENDERING;
+    uint16_t CSS_PAGE_BREAK_BEFORE;
+    uint16_t CSS_PAGE_BREAK_AFTER;
+    uint16_t CSS_PAGE_BREAK_INSIDE;
+    uint16_t CSS_ORPHANS;
+    uint16_t CSS_WIDOWS;
+} CSSattribute;
 
 typedef enum {
     CSS_ATTRIBUTE_DISPLAY_BLOCK,
@@ -396,13 +637,13 @@ typedef enum {
     CSS_ATTRIBUTE_DISPLAY_GRID
 } CSSattributeDisplay;
 
-typedef enum {
+typedef uint8_t CSSattributePosition; enum {
     CSS_ATTRIBUTE_POSITION_STATIC,
     CSS_ATTRIBUTE_POSITION_RELATIVE,
     CSS_ATTRIBUTE_POSITION_ABSOLUTE,
     CSS_ATTRIBUTE_POSITION_FIXED,
     CSS_ATTRIBUTE_POSITION_STICKY
-} CSSattributePosition;
+};
 
 typedef enum {
     CSS_ATTRIBUTE_BOX_SIZING_BORDER_BOX,
@@ -542,39 +783,90 @@ typedef enum {
     HEAP_CLASS_BIG_BIG_HEAP = 3
 } HeapClass;
 
+//calling it group1 incase there need to be group2
+typedef uint64_t DOBJpropertiesIsSetGroup1Flag; enum {
+    DOBJ_PROPERTIES_IS_SET_GROUP1_WIDTH_BIT  = 0b1,
+    DOBJ_PROPERTIES_IS_SET_GROUP1_HEIGHT_BIT = 0b10,
+    DOBJ_PROPERTIES_IS_SET_GROUP1_TOP_BIT    = 0b100,
+    DOBJ_PROPERTIES_IS_SET_GROUP1_BOTTOM_BIT = 0b1000,
+    DOBJ_PROPERTIES_IS_SET_GROUP1_LEFT_BIT   = 0b10000,
+    DOBJ_PROPERTIES_IS_SET_GROUP1_RIGHT_BIT  = 0b100000
+};
+
+typedef struct {
+    float top;
+    float bottom;
+    float left;
+    float right;
+} LayoutBoxProperties;
+
+typedef struct {
+    struct DOBJPool *pool;
+    uint16_t item_index;
+} DOBJHandler;
+
 typedef struct {
     char tag_name[256];
     TagIdentifier tag_id;
-    void *p_attr;
+    HeapHandler16 p_attr;
     size_t attr_size;
-    void *p_inner;
-    size_t inner_size;
-    void *p_parent;
+    HeapHandler64 p_inner;
+    DOBJHandler p_parent;
+    uint16_t child_count;
     uint8_t life_span_point;
+
+    DOBJpropertiesIsSetGroup1Flag is_set_g1;
+
+    CSSattributePosition position;
+    float x;
+    float y;
+    float width;
+    float height;
+
+    LayoutBoxProperties inset;
+    LayoutBoxProperties padding;
+    LayoutBoxProperties margin;
 } DOBJ;
 
-typedef struct {
+typedef struct DOBJPool {
     uint16_t pool_index;
     uint16_t live_objects;
-    void *p_prev;
-    void *p_next;
+    struct DOBJPool *p_prev;
+    struct DOBJPool *p_next;
     uint8_t status_flags[POOL_ELEMENT_COUNT];
 
     char tag_names[POOL_ELEMENT_COUNT][256];
     TagIdentifier tag_ids[POOL_ELEMENT_COUNT];
-    void *p_attrs[POOL_ELEMENT_COUNT];
+    HeapHandler16 p_attrs[POOL_ELEMENT_COUNT];
     size_t attr_sizes[POOL_ELEMENT_COUNT];
-    void *p_inner[POOL_ELEMENT_COUNT];
-    size_t inner_size[POOL_ELEMENT_COUNT];
+    HeapHandler64 p_inner[POOL_ELEMENT_COUNT];
     DOBJHandler parent[POOL_ELEMENT_COUNT];
+    uint16_t child_count[POOL_ELEMENT_COUNT];
     uint8_t life_span_points[POOL_ELEMENT_COUNT];
 
-    
+    DOBJpropertiesIsSetGroup1Flag is_set_g1[POOL_ELEMENT_COUNT];
+
+    CSSattributePosition position[POOL_ELEMENT_COUNT];
+    float x[POOL_ELEMENT_COUNT];
+    float y[POOL_ELEMENT_COUNT];
+    float width[POOL_ELEMENT_COUNT];
+    float height[POOL_ELEMENT_COUNT];
+
+    LayoutBoxProperties inset[POOL_ELEMENT_COUNT];
+    LayoutBoxProperties padding[POOL_ELEMENT_COUNT];
+    LayoutBoxProperties margin[POOL_ELEMENT_COUNT];
+
 } DOBJPool;
 
-typedef struct {
-    DOBJPool *pool;
-    uint16_t item_index;
-} DOBJHandler;
+
+
+static inline LayoutBoxProperties padding(float t, float r, float b, float l)
+{
+    return (LayoutBoxProperties){.top = t, .bottom = b, .left = l, .right = r};
+}
+static inline LayoutBoxProperties margin(float t, float r, float b, float l)
+{
+    return (LayoutBoxProperties){.top = t, .bottom = b, .left = l, .right = r};
+}
 
 #endif

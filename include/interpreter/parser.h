@@ -20,46 +20,50 @@ typedef enum {
     END
 } PARSER_STATE;
 
-typedef enum {
+typedef uint8_t BuildDOBJoption; enum {
     TAG_NAME   = 0b00000001,
     ATTRIBUTE  = 0b00000010,
     ATTR_VALUE = 0b00000100,
+
     CREATE     = 0b00010000,
     UPDATE     = 0b00100000
-} BuildDOBJOption;
+};
 /*
-      1   2   3   4   5   6   7   8   <-- byte
+      1   2   3   4   5   6   7   8   <-- bit
     | b | b | b | b | b | b | b | b |
       _____________   _____________
             |               |
         type flags    operation mode
 */
+typedef struct {
+    BuildDOBJoption option;
+    DOBJPool *ref_pool;
+    uint64_t glb_id;
+    const char *tag;
+    uint8_t t_size;
+    const char *attr_n;
+    uint8_t an_size;
+    const char *attr_v;
+    uint16_t av_size;
+} BuildDOBJinfo;
 
-void build_dom(DOBJPool *pool, uint64_t *glb_index, char *tag, uint8_t t_size, char *attr, uint8_t an_size, char *attr_v, uint16_t av_size, uint8_t *rqst_option, DOBJHandler *handler)
+DOBJHandler build_dom(BuildDOBJinfo *build_info)
 {
-    if (*rqst_option & UPDATE)
+    if (build_info->option & UPDATE)
     {
-        if (glb_index == NULL)
-        {
-            printf(ERR SYS_DBG_PREFIX" Invalid attempt to update unknown item from pool");
-            exit(1);
-        }
-        DOBJHandler obj_h = pool_search(pool, *glb_index);
-
-        *rqst_option &= ~BUILD_DOM_OP_MODE_MASK;
-    } else if (*rqst_option & CREATE)
+        DOBJHandler obj_h = pool_search(build_info->ref_pool, build_info->glb_id);
+    } else if (build_info->option & CREATE)
     {
         DOBJ new_obj = (DOBJ){};
-        if (*rqst_option & TAG_NAME)
+        if (build_info->option & TAG_NAME)
         {
-            strcpy(new_obj.tag_name, tag);
-            new_obj.tag_id = tag_name_resolver(tag);
+            strcpy(new_obj.tag_name, build_info->tag);
+            new_obj.tag_id = tag_name_resolver(build_info->tag);
 
-            *rqst_option &= ~TAG_NAME;
+            build_info->option &= ~TAG_NAME;
         }
-        dobj_pool_alloc(new_obj, pool);
+        DOBJHandler obj_h = dobj_pool_alloc(&new_obj, build_info->ref_pool);
 
-        *rqst_option &= ~BUILD_DOM_OP_MODE_MASK;
     }
 }
 
@@ -96,6 +100,13 @@ void parse(char *src, uint8_t *dict, uint64_t dict_size, App* app)
     PARSER_STATE state = BEFORE_TAG;
     bool enclosed_value = false;
     bool value_transit = false;
+
+    uint16_t attr_alloc_size = 128;
+    uint16_t attr_count = 0;
+    CSSattribute *attrs = malloc(attr_alloc_size);
+    float *attr_values = malloc(attr_alloc_size);
+
+    BuildDOBJinfo build_info = (BuildDOBJinfo){};
 
     //construct logical objects on memory
     for (uint64_t i = 0; i < dict_size - 1;)
@@ -161,7 +172,7 @@ void parse(char *src, uint8_t *dict, uint64_t dict_size, App* app)
                         }
                         break;
                     case IN_ATTR_NAME:
-                        if (value[i] == '=')
+                        if (value[i] == '=') //transitioning from reading attribute name to attribute value
                         {
                             end_value_ind = i - 1;
                             state = BEFORE_ATTR_VALUE;
@@ -169,7 +180,7 @@ void parse(char *src, uint8_t *dict, uint64_t dict_size, App* app)
                             attr_name_size = end_value_ind - strt_value_ind + 1;
                             memcpy(attribute, value + strt_value_ind, attr_name_size);
                             attribute[strt_value_ind + attr_name_size++] = '\0';
-                        } else if (is_separator(value[i]))
+                        } else if (is_separator(value[i])) //register attribute with unset value
                         {
                             end_value_ind = i - 1;
                             state = AFTER_ATTR_NAME;
@@ -177,6 +188,8 @@ void parse(char *src, uint8_t *dict, uint64_t dict_size, App* app)
                             attr_name_size = end_value_ind - strt_value_ind + 1;
                             memcpy(attribute, value + strt_value_ind, attr_name_size);
                             attribute[strt_value_ind + attr_name_size++] = '\0';
+
+                            //attrs[attr_count] = 
                         }
                         break;
                     case AFTER_ATTR_NAME:
@@ -221,6 +234,8 @@ void parse(char *src, uint8_t *dict, uint64_t dict_size, App* app)
         
     }
 
+    free(attrs);
+    free(attr_values);
     free(src);
     free(dict);
 }

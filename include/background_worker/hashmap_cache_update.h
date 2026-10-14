@@ -120,9 +120,9 @@ DEFINE_MERGE_SORT(64, HeapChunkHandler64)
     merge_sort_snapshot_##SIZE(&HEAP->free_list, (uint64_t *)&HEAP->free_list_count, &HEAP->free_list_lock, &HEAP->free_list_version); \
     for (uint##SIZE##_t i = 0; i < HEAP->free_list_count; i++) \
     { \
-        uint##SIZE##_t h_hash_ind = hash_2_index(hash64(HEAP->free_list[i].a), UINT8_MAX); \
+        uint##SIZE##_t h_hash_ind = hash_2_index(hash64(HEAP->free_list[i].a, NO_SEED), UINT8_MAX); \
         HEAP->heap_free_list_cache_h[h_hash_ind] = i; \
-        uint##SIZE##_t t_hash_ind = hash_2_index(hash64(HEAP->free_list[i].a + HEAP->free_list[i].s), UINT8_MAX); \
+        uint##SIZE##_t t_hash_ind = hash_2_index(hash64(HEAP->free_list[i].a + HEAP->free_list[i].s, NO_SEED), UINT8_MAX); \
         HEAP->heap_free_list_cache_t[t_hash_ind] = i; \
     } \
 }

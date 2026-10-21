@@ -71,25 +71,51 @@ void shader_bin_read(const char *file, uint64_t *p_size, uint32_t *p_buffer)
 
     fclose(spv);
 }
-// extern uint64_t arr_size(void *p_arr, uint64_t return_size)
-// {
-//     if (p_arr == NULL)
-//     {
-//         printf(WARN SYS_DBG_PREFIX" Potential alrithmetic error\n");
-//         return 0;
-//     }
-//     uint64_t size = sizeof(p_arr) / sizeof(p_arr[0]);
 
-//     if (size >> unsigned_type_width_resolver(return_size))
-//     {
-//         printf(WARN SYS_DBG_PREFIX" Return size overflowed\n");
-//     }
-//     return size;
-// }
-
-uint32_t hash_2_index(uint32_t hash, size_t size)
+uint32_t static inline hash_2_index(uint32_t hash, size_t size)
 {
     return hash & (size - 1);
 }
 
+void static inline *meminject(void *main, size_t m_size, void *sub, size_t s_size, size_t injection_index, size_t *return_size)
+{
+    *return_size = m_size + s_size;
+    void *file_builder_buffer = malloc(*return_size);
+    memcpy(file_builder_buffer, main, m_size);
+        
+    uint64_t move_size = m_size - (injection_index + 1);
+    memmove(file_builder_buffer + injection_index + s_size, file_builder_buffer + injection_index, move_size);
+    memcpy(file_builder_buffer + injection_index, sub, s_size);
+
+    return file_builder_buffer;
+}
+
+const uint8_t ascii_map[256] =
+{
+    ['0'] = 0U, ['1'] = 1U, ['2'] = 2U, ['3'] = 3U, ['4'] = 4U, ['5'] = 5U, ['6'] = 6U, ['7'] = 7U, ['8'] = 8U, ['9'] = 9U,
+    ['A'] = 10U, ['B'] = 11U, ['C'] = 12U, ['D'] = 13U, ['E'] = 14U, ['F'] = 15U,
+    ['a'] = 10U, ['b'] = 11U, ['c'] = 12U, ['d'] = 13U, ['e'] = 14U, ['f'] = 15U
+};
+
+uint64_t h_2_ull(const char *hex)
+{
+    uint64_t ull = 0;
+    for (; *hex; hex++)
+    {
+        ull = ull << 4 | ascii_map[*hex];
+    }
+    return ull;
+}
+uint32_t h_2_srgb(const char *hex)
+{
+    return (uint32_t)
+    (
+        ascii_map[hex[0]] << 20
+        | ascii_map[hex[1]] << 16
+        | ascii_map[hex[2]] << 12
+        | ascii_map[hex[3]] << 8
+        | ascii_map[hex[4]] << 4
+        | ascii_map[hex[5]]
+    );
+}
 #endif

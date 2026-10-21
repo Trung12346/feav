@@ -47,11 +47,12 @@ void preprocess(int argc, char **argv, char **dst, uint64_t *size)
         }
     }
 
-    uint64_t file_size;
+    size_t file_size;
     char *file;
     file_read("index.html", &file_size, NULL);
-    file = malloc((size_t)file_size);
+    file = malloc((size_t)file_size + 1);
     file_read("index.html", &file_size, file);
+    file[file_size++] = '\0';
 
     switch (preproc_encode)
     {
@@ -66,7 +67,7 @@ void preprocess(int argc, char **argv, char **dst, uint64_t *size)
         default:
     }
 
-    printf("%u" PRIu64 "\n", file_size);
+    printf("FILE SIZE: %llu\n", file_size);
 
     char *file_builder_buffer;
     uint64_t builder_size;
@@ -92,8 +93,8 @@ void preprocess(int argc, char **argv, char **dst, uint64_t *size)
     for (;;)
     {
         char *p = strstr(file, "#include");
-
         if (p == NULL) break;
+
         uint64_t index = p - file;
         uint64_t start_index = index + strlen("#include");
         uint64_t value_start = 0;
@@ -143,19 +144,9 @@ void preprocess(int argc, char **argv, char **dst, uint64_t *size)
         file_read(value, &ext_size, file_ext_buffer);
         fwrite(file_ext_buffer, 1, ext_size, stdout);
 
-        builder_size = file_size + ext_size;
-        printf("%u\n", builder_size);
-        file_builder_buffer = malloc(builder_size);
-        // memcpy(file_builder_buffer, file_ext_buffer, ext_size);
-        // memcpy(file_builder_buffer + ext_size, file, file_size);
-        memcpy(file_builder_buffer, file, file_size);
-        
-        uint64_t move_size = file_size - index;
-        memmove(file_builder_buffer + index + ext_size, file_builder_buffer + index, move_size);
-        memcpy(file_builder_buffer + index, file_ext_buffer, ext_size);
+        file_builder_buffer = meminject(file, file_size, file_ext_buffer, ext_size, index, &file_size);
 
         free(file);
-        file_size = builder_size;
         file = malloc(file_size);
         memcpy(file, file_builder_buffer, file_size);
 

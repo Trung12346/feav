@@ -411,7 +411,6 @@ void heap_init(void **heap, void *prev_heap, uint8_t heap_class)
             heap_init(&HEAP->p_next, HEAP, heap_class); \
         } \
         rtn_obj = heap_alloc(HEAP->p_next, size, heap_class, queue); \
-        HEAP->live_objects--; \
     } \
     queue_submit_hflo \
     ( \
@@ -455,8 +454,8 @@ HeapHandler64 heap_alloc(void *heap, size_t size, uint8_t heap_class, Background
 #define HEAP_FREE(HEAP, ALIAS, CH_TYPE) \
 { \
     size_t chunk_size = hh.s / sizeof(HEAP->mem[0]); \
-    uint8_t hash_ind_h = hash_2_index(hash64(hh.a + chunk_size, NO_SEED), UINT8_MAX); \
-    uint8_t hash_ind_t = hash_2_index(hash64(hh.a, NO_SEED), UINT8_MAX); \
+    uint8_t hash_ind_h = hash_2_index(hash64(hh.a + chunk_size, NO_SEED), 256); \
+    uint8_t hash_ind_t = hash_2_index(hash64(hh.a, NO_SEED), 256); \
     AcquireSRWLockExclusive(&HEAP->free_list_lock); \
     HeapChunkHandler##CH_TYPE *head_chunk = &HEAP->free_list[HEAP->heap_free_list_cache_h[hash_ind_h]]; \
     HeapChunkHandler##CH_TYPE *tail_chunk = &HEAP->free_list[HEAP->heap_free_list_cache_t[hash_ind_t]]; \
@@ -496,6 +495,7 @@ HeapHandler64 heap_alloc(void *heap, size_t size, uint8_t heap_class, Background
             .s = chunk_size \
         }; \
     } \
+    HEAP->live_objects--; \
     ReleaseSRWLockExclusive(&HEAP->free_list_lock); \
     queue_submit_hflo \
     ( \

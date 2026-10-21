@@ -63,6 +63,11 @@ DOBJHandler build_dom(BuildDOBJinfo *build_info)
             build_info->option &= ~TAG_NAME;
         }
         DOBJHandler obj_h = dobj_pool_alloc(&new_obj, build_info->ref_pool);
+        DOBJPool *p = obj_h.pool;
+        uint64_t id = obj_h.item_index;
+
+        p->tag_ids[id] = html_tag_hmap_id_get(build_info->tag);
+        strncpy(&p->tag_names[id], build_info->tag, build_info->t_size);
 
     }
 }

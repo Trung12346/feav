@@ -2,3 +2,5 @@ dependencies/
 build/
 .vscode/
 shaders/build/
+assets/html-tags-enum.bin
+assets/css-attributes-enum.bin

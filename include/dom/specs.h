@@ -4,6 +4,7 @@
 #include <stdint.h>
 #include <stdatomic.h>
 #include <windows.h>
+#include "hardware_utils/hash.h"
 
 #define QWORD_SCAN_IS_OCCUPIED_MASK 0b0000000100000001000000010000000100000001000000010000000100000001ULL
 #define DWORD_SCAN_IS_OCCUPIED_MASK 0b00000001000000010000000100000001UL
@@ -18,6 +19,13 @@
 #define BIG_HEAP_SIZE 1024 * 1024 * 4
 #define BIG_BIG_HEAP_SIZE 1024 * 1024 * 256
 #define FREE_LIST_ALLOC_COUNT 32
+#define HTML_TAG_RESRC_STRIDE 16
+#define HTML_TAG_COUNT 63
+#define HTML_TAG_HMAP_SLOT_COUNT 2048
+#define CSS_ATTRIBUTE_RESRC_STRIDE 32
+#define CSS_ATTRIBUTE_COUNT 210
+#define CSS_ATTRIBUTE_HMAP_SLOT_COUNT 2048
+#define SEED_SIGNATURE_WIDTH 8
 
 typedef uint64_t qword;
 typedef uint32_t dword;
@@ -383,8 +391,73 @@ enum {
     CSS_ORPHANS,
     CSS_WIDOWS,
  
-    CSS_ATTRIBUTE_COUNT /* number of attributes + 1 (last valid value is COUNT - 1) */
 }; //claude helped with tis
+
+typedef struct {
+    uint16_t HTML_HTML;
+    uint16_t HTML_HEAD;
+    uint16_t HTML_BODY;
+    uint16_t HTML_TITLE;
+    uint16_t HTML_LINK;
+    uint16_t HTML_STYLE;
+    uint16_t HTML_SCRIPT;
+    uint16_t HTML_META;
+    uint16_t HTML_DIV;
+    uint16_t HTML_P;
+    uint16_t HTML_BR;
+    uint16_t HTML_HR;
+    uint16_t HTML_H1;
+    uint16_t HTML_H2;
+    uint16_t HTML_H3;
+    uint16_t HTML_H4;
+    uint16_t HTML_H5;
+    uint16_t HTML_H6;
+    uint16_t HTML_A;
+    uint16_t HTML_IMG;
+    uint16_t HTML_UL;
+    uint16_t HTML_OL;
+    uint16_t HTML_LI;
+    uint16_t HTML_TABLE;
+    uint16_t HTML_THEAD;
+    uint16_t HTML_TBODY;
+    uint16_t HTML_TFOOT;
+    uint16_t HTML_TR;
+    uint16_t HTML_TH;
+    uint16_t HTML_TD;
+    uint16_t HTML_FORM;
+    uint16_t HTML_INPUT;
+    uint16_t HTML_TEXTAREA;
+    uint16_t HTML_BUTTON;
+    uint16_t HTML_SELECT;
+    uint16_t HTML_OPTION;
+    uint16_t HTML_LABEL;
+    uint16_t HTML_HEADER;
+    uint16_t HTML_NAV;
+    uint16_t HTML_MAIN;
+    uint16_t HTML_SECTION;
+    uint16_t HTML_ARTICLE;
+    uint16_t HTML_ASIDE;
+    uint16_t HTML_FOOTER;
+    uint16_t HTML_VIDEO;
+    uint16_t HTML_AUDIO;
+    uint16_t HTML_SOURCE;
+    uint16_t HTML_CANVAS;
+    uint16_t HTML_SVG;
+    uint16_t HTML_DETAILS;
+    uint16_t HTML_SUMMARY;
+    uint16_t HTML_IFRAME;
+    uint16_t HTML_PRE;
+    uint16_t HTML_CODE;
+    uint16_t HTML_BLOCKQUOTE;
+    uint16_t HTML_STRONG;
+    uint16_t HTML_EM;
+    uint16_t HTML_B;
+    uint16_t HTML_I;
+    uint16_t HTML_U;
+    uint16_t HTML_SMALL;
+    uint16_t HTML_SUB;
+    uint16_t HTML_SUP;
+} HTMLtag;
 
 typedef struct {
     uint16_t CSS_MARGIN_TOP;
@@ -867,6 +940,10 @@ static inline LayoutBoxProperties padding(float t, float r, float b, float l)
 static inline LayoutBoxProperties margin(float t, float r, float b, float l)
 {
     return (LayoutBoxProperties){.top = t, .bottom = b, .left = l, .right = r};
+}
+static inline uint16_t html_tag_hmap_id_get(const char* str)
+{
+    return hash_2_index(hash64(fnv1a_64(str, strlen(str)), SEED_HTML_TAG), HTML_TAG_HMAP_SLOT_COUNT);
 }
 
 #endif

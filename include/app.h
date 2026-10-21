@@ -6,12 +6,14 @@
 #include "CGLM/types.h"
 #include "dom/dom_entity.h"
 #include "background_worker/hashmap_cache_update.h"
+#include "windows_utils/file.h"
 
 #define VIEW_PORT_WIDTH 1000
 #define VIEW_PORT_HEIGHT 760
 
 typedef struct {
-    CSSattribute *ca; //"runtime-enum", enum configuration is dependent on hashing algorithm 
+    CSSattribute *ca; //"runtime-enum", enum configuration is dependent on hashing algorithm
+    HTMLtag *ha;
 } AppCaches;
 
 typedef struct
@@ -132,19 +134,67 @@ static void clean_up(App *app)
     glfwDestroyWindow(app->window);
     glfwTerminate();
 }
-static void resource_init(App *app)
+
+void create_html_hmap(App *app, size_t *size, void **buffer)
 {
-    size_t size;
+    file_read("../assets/html-tags.bin", size, NULL);
+    if (*size == 0)
+    {
+        printf(ERR SYS_DBG_PREFIX" Missing resource \"html-tags.bin\"");
+        exit(1);
+    }
+    *buffer = malloc(*size);
+    file_read("../assets/html-tags.bin", size, *buffer);
+
+    const char *cursor_resrc_p = *buffer;
+    uint16_t *cursor_struct_p = (uint16_t *)app->caches.ha;
+    for (uint8_t i = 0U; i < HTML_TAG_COUNT; i++)
+    {
+        *cursor_struct_p = html_tag_hmap_id_get(cursor_resrc_p);
+
+        cursor_struct_p++;
+        cursor_resrc_p += HTML_TAG_RESRC_STRIDE;
+    }
+    void *write_buffer = malloc(sizeof(HTMLtag) + SEED_SIGNATURE_WIDTH);
+    *(uint64_t *)write_buffer = SEED_HTML_TAG;
+    memcpy(write_buffer + SEED_SIGNATURE_WIDTH, app->caches.ha, sizeof(HTMLtag));
+    create_write_file("../assets/html-tags-enum.bin", write_buffer, sizeof(HTMLtag) + SEED_SIGNATURE_WIDTH);
+}
+void resource_init(App *app)
+{
+    app->caches.ha = calloc(1, sizeof(HTMLtag));
+
+    size_t size = 0;
     void *buffer;
 
-    if (size == 0)
+    file_read("../assets/html-tags-enum.bin", &size, NULL);
+
+    if (size == 0) create_html_hmap(app, &size, &buffer);
+    else
     {
-        //create hashmap for css atribute
+        buffer = malloc(size);
+        file_read("../assets/html-tags-enum.bin", &size, buffer);
+        if (*(uint64_t *)buffer != SEED_HTML_TAG || size != (sizeof(HTMLtag) + SEED_SIGNATURE_WIDTH))
+        {
+            free(buffer);
+            size = 0;
+            buffer = NULL;
+            create_html_hmap(app, &size, &buffer);
+        } else memcpy(app->caches.ha, buffer + SEED_SIGNATURE_WIDTH, sizeof(HTMLtag));
     }
+
+    free(buffer);
+    buffer = NULL;
+    size = 0;
+
+    app->caches.ca = calloc(1, sizeof(CSSattribute));
+    file_read("../assets/css-attributes-enum.bin", &size, NULL);
+    //i will come back here later
 }
 
 void run(App *app)
 {
+    resource_init(app);
     window_init(&app->window, app);
     dobj_init(app);
     vulkan_init(app);

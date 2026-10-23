@@ -11,7 +11,7 @@ void file_read(const char *file, uint64_t *p_size, void *p_buffer)
     FILE *f = fopen(file, "rb");
     if (f == NULL)
     {
-        printf(ERR SYS_DBG_PREFIX" Unable to read file, forwarding..\n");
+        printf(ERR SYS_DBG_PREFIX" Unable to read file %s, forwarding..\n", file);
         return;
     }
     fseek(f, 0, SEEK_END);

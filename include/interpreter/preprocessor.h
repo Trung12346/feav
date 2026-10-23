@@ -127,8 +127,9 @@ void preprocess(int argc, char **argv, char **dst, uint64_t *size)
             {
                 value_end = i - 1;
                 value_size = value_end - value_start + 1;
-                value = malloc(value_size);
+                value = malloc(++value_size);
                 memcpy(value, file + value_start, value_size);
+                value[value_size - 1] = '\0';
 
                 printf("%s\n", value);
                 
@@ -139,6 +140,7 @@ void preprocess(int argc, char **argv, char **dst, uint64_t *size)
             }
         }
 
+        printf("file name: %s\n", value);
         file_read(value, &ext_size, NULL);
         file_ext_buffer = malloc(ext_size);
         file_read(value, &ext_size, file_ext_buffer);

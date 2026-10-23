@@ -15,6 +15,7 @@
 #define POOL_STATUS_IS_OCCUPIED_BIT 0b00000001U
 #define POOL_ELEMENT_COUNT 1024
 #define POOL_STATUS_FLAGS_SIZE (POOL_ELEMENT_COUNT * HALFWORD_WIDTH)
+#define POOL_MAP_ALLOC_UNIT 64
 #define HEAP_SIZE 1024 * 64
 #define BIG_HEAP_SIZE 1024 * 1024 * 4
 #define BIG_BIG_HEAP_SIZE 1024 * 1024 * 256
@@ -25,7 +26,7 @@
 #define CSS_ATTRIBUTE_RESRC_STRIDE 32
 #define CSS_ATTRIBUTE_COUNT 210
 #define CSS_ATTRIBUTE_HMAP_SLOT_COUNT 2048
-#define SEED_SIGNATURE_WIDTH 8
+#define SEED_SIGNATURE_STRIDE 8
 
 typedef uint64_t qword;
 typedef uint32_t dword;
@@ -53,7 +54,7 @@ typedef enum {
     ),
 } UpdateDOBJFlagGroups;
 
-typedef enum {
+typedef uint8_t TagIdentifier; enum {
     CUSTOM      = 0,
     HTML        = 1,
     HEAD        = 2,
@@ -118,7 +119,7 @@ typedef enum {
     SMALL       = 61,
     SUB         = 62,
     SUP         = 63
-} TagIdentifier;
+};
 
 typedef struct {
     uint16_t HTML_HTML;
@@ -506,70 +507,72 @@ typedef enum {
     CSS_ATTRIBUTE_FLEX_WRAP_BALANCE_REVERSE
 } CSSattributeFlexWrap;
 
-
+typedef uint16_t HeapAddress16;
+typedef uint64_t HeapAddress64;
 //memory managment
 typedef struct {
     void *heap;
-    uint16_t a;
+    HeapAddress16 a; //in page size
     uint16_t s; //in byte
 } HeapHandler16;
 typedef struct {
-    uint16_t a;
+    HeapAddress16 a; //in page size
     uint16_t s; //in word
 } HeapChunkHandler16;
 typedef struct {
     void *heap;
-    uint64_t a;
+    HeapAddress64 a; //in page size
     uint64_t s; //in byte
 } HeapHandler64;
 typedef struct {
-    uint64_t a;
+    HeapAddress64 a; //in page size
     uint64_t s; //in qword
 } HeapChunkHandler64;
 
 typedef struct {
-    uint16_t heap_index;
-    uint16_t live_objects;
     void *p_prev;
     void *p_next;
-    HeapChunkHandler16 *free_list;
-    uint16_t free_list_alloc_count;
-    uint16_t free_list_count;
     SRWLOCK free_list_lock;
     uint64_t free_list_version;
+    HeapChunkHandler16 *free_list;
+
+    uint16_t heap_index;
+    uint16_t live_objects;
+    uint16_t free_list_alloc_count;
+    uint16_t free_list_count;
     uint16_t heap_free_list_cache_h[256]; //hashed head local address of the more significant free chunk
     uint16_t heap_free_list_cache_t[256]; //hashed tail local address of the less significant free chunk
-
     uint16_t mem[HEAP_SIZE / 2]; //size: 64KB, page size: 2B, minimum allocatable chunk is sizeof(mem) / (UINT16_MAX + 1) = 2B
 } Heap;
 typedef struct {
-    uint16_t heap_index;
-    uint8_t live_objects;
     void *p_prev;
     void *p_next;
-    HeapChunkHandler64 *free_list;
-    uint8_t free_list_alloc_count;
-    uint8_t free_list_count;
     SRWLOCK free_list_lock;
     uint64_t free_list_version;
+    HeapChunkHandler64 *free_list;
+
+    uint16_t heap_index;
+    uint8_t live_objects;
+    uint8_t free_list_alloc_count;
+    uint8_t free_list_count;
     uint8_t heap_free_list_cache_h[256];
     uint8_t heap_free_list_cache_t[256];
 
     uint64_t mem[BIG_HEAP_SIZE / 8]; //size: 4MB, page size: 8B, desired minimum allocatable chunk is sizeof(mem) / (UINT8_MAX + 1) = 16KB
 } BHeap;
 typedef struct {
-    uint16_t heap_index;
-    uint8_t live_objects;
     void *p_prev;
     void *p_next;
-    HeapChunkHandler64 *free_list;
-    uint8_t free_list_alloc_count;
-    uint8_t free_list_count;
     SRWLOCK free_list_lock;
     uint64_t free_list_version;
+    HeapChunkHandler64 *free_list;
+
+    uint16_t heap_index;
+    uint8_t live_objects;
+    uint8_t free_list_alloc_count;
+    uint8_t free_list_count;
     uint8_t heap_free_list_cache_h[256];
     uint8_t heap_free_list_cache_t[256];
-    uint8_t class;
 
     uint64_t mem[BIG_BIG_HEAP_SIZE / 8]; //size: 256MB, page size: 8B, desired minimum allocatable chunk is sizeof(mem) / (UINT8_MAX + 1) = 1MB
 } BBHeap;
@@ -606,10 +609,9 @@ typedef struct {
 } DOBJHandler;
 
 typedef struct {
-    char tag_name[256];
+    char tag_name[16];
     TagIdentifier tag_id;
     HeapHandler16 p_attr;
-    size_t attr_size;
     HeapHandler64 p_inner;
     DOBJHandler p_parent;
     uint16_t child_count;
@@ -628,14 +630,16 @@ typedef struct {
     LayoutBoxProperties margin;
 } DOBJ;
 
-typedef struct DOBJPool {
+
+//conceptually
+/*
     uint16_t pool_index;
     uint16_t live_objects;
     struct DOBJPool *p_prev;
     struct DOBJPool *p_next;
     uint8_t status_flags[POOL_ELEMENT_COUNT];
 
-    char tag_names[POOL_ELEMENT_COUNT][256];
+    char tag_names[POOL_ELEMENT_COUNT][16];
     TagIdentifier tag_ids[POOL_ELEMENT_COUNT];
     HeapHandler16 p_attrs[POOL_ELEMENT_COUNT];
     size_t attr_sizes[POOL_ELEMENT_COUNT];
@@ -655,10 +659,65 @@ typedef struct DOBJPool {
     LayoutBoxProperties inset[POOL_ELEMENT_COUNT];
     LayoutBoxProperties padding[POOL_ELEMENT_COUNT];
     LayoutBoxProperties margin[POOL_ELEMENT_COUNT];
+*/
+typedef struct DOBJPool {
+    uint16_t pool_index;
+    uint16_t live_objects;
+    struct DOBJPool *p_prev;
+    struct DOBJPool *p_next;
+    uint8_t status_flags[POOL_ELEMENT_COUNT];
+
+    char tag_names[POOL_ELEMENT_COUNT][16];
+    TagIdentifier tag_ids[POOL_ELEMENT_COUNT];
+    //HeapHandler16 p_attrs[POOL_ELEMENT_COUNT];
+    Heap *HeapHandler16_heap_h_attrs[POOL_ELEMENT_COUNT];
+    HeapAddress16 HeapHandler16_a_h_attrs[POOL_ELEMENT_COUNT];
+    uint16_t HeapHandler16_s_h_attrs[POOL_ELEMENT_COUNT];
+
+    //HeapHandler64 p_inner[POOL_ELEMENT_COUNT];
+    BHeap *HeapHandler64_heap_h_inner[POOL_ELEMENT_COUNT];
+    HeapAddress64 HeapHandler64_a_h_inner[POOL_ELEMENT_COUNT];
+    uint64_t HeapHandler64_s_h_inner[POOL_ELEMENT_COUNT];
+
+    //DOBJHandler parent[POOL_ELEMENT_COUNT];
+    struct DOBJPool *DOBJHandler_pool_parent[POOL_ELEMENT_COUNT];
+    uint16_t DOBJHandler_item_index_parent[POOL_ELEMENT_COUNT];
+
+    uint16_t child_count[POOL_ELEMENT_COUNT];
+    uint8_t life_span_points[POOL_ELEMENT_COUNT];
+
+    DOBJpropertiesIsSetGroup1Flag is_set_g1[POOL_ELEMENT_COUNT];
+
+    CSSattributePosition position[POOL_ELEMENT_COUNT];
+    float x[POOL_ELEMENT_COUNT];
+    float y[POOL_ELEMENT_COUNT];
+    float width[POOL_ELEMENT_COUNT];
+    float height[POOL_ELEMENT_COUNT];
+
+    LayoutBoxProperties inset[POOL_ELEMENT_COUNT];
+    LayoutBoxProperties padding[POOL_ELEMENT_COUNT];
+    LayoutBoxProperties margin[POOL_ELEMENT_COUNT];
 
 } DOBJPool;
 
-
+static inline HeapHandler16 dobj_get_h_attrs(DOBJHandler h)
+{
+    DOBJPool *p = h.pool;
+    uint16_t i = h.item_index;
+    return (HeapHandler16){.heap = p->HeapHandler16_heap_h_attrs[i], .a = p->HeapHandler16_a_h_attrs[i], .s = p->HeapHandler16_s_h_attrs};
+}
+static inline HeapHandler64 dobj_get_h_inner(DOBJHandler h)
+{
+    DOBJPool *p = h.pool;
+    uint16_t i = h.item_index;
+    return (HeapHandler64){.heap = p->HeapHandler64_heap_h_inner[i], .a = p->HeapHandler64_a_h_inner[i], .s = p->HeapHandler64_s_h_inner[i]};
+}
+static inline DOBJHandler dobj_get_h_parent(DOBJHandler h)
+{
+    DOBJPool *p = h.pool;
+    uint16_t i = h.item_index;
+    return (DOBJHandler){.pool = p->DOBJHandler_pool_parent[i], .item_index = p->DOBJHandler_item_index_parent[i]};
+}
 
 static inline LayoutBoxProperties padding(float t, float r, float b, float l)
 {

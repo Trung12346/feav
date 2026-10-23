@@ -9,6 +9,9 @@
 #include "ryu/ryu_parse.h"
 
 #define BUILD_DOM_OP_MODE_MASK 0b11110000
+#define HEAP_CSS_ATTRIBUTE_STRIDE 2
+#define HEAP_CSS_VALUE_STRIDE 4
+#define VALUE_BUFFER_SIZE 1024 * 2
 
 bool is_separator(char c) {
     return (c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == '\0');
@@ -19,17 +22,24 @@ typedef enum {
     CSS_IN_PROPERTY,
     CSS_AFTER_PROPERTY,
     CSS_BEFORE_VALUE,
-    CSS_IN_VALUE
+    CSS_IN_VALUE,
+    CSS_AFTER_VALUE
 } CSS_PARSER_STATE;
 
-void parse_css(const char *css, DOBJHandler obj_h)
+HeapHandler16 css_parse(const char *css, App *app)
 {
     const char *p_strt;
     uint64_t len = 0;
     const char *p = css;
     CSS_PARSER_STATE state = CSS_BEFORE_PROPERTY;
-    
-    
+    CSSattribute *cache = app->caches.ca;
+
+    uint64_t buffer_alloc_size = 1024;
+    uint64_t buffer_size = 0;
+    uint8_t *buffer = malloc(buffer_alloc_size); 
+
+    uint16_t css_id;
+    uint32_t value;
 
     for (; *p; p++)
     {
@@ -47,22 +57,88 @@ void parse_css(const char *css, DOBJHandler obj_h)
                 {
                     state = CSS_BEFORE_VALUE;
                     len = p - p_strt;
-                    html_tagn_hmap_id_get(p_strt, len);
+                    css_id = css_attrn_hmap_id_get(p_strt, len);
+                    if (buffer_size + HEAP_CSS_ATTRIBUTE_STRIDE > buffer_alloc_size)
+                    {
+                        buffer_alloc_size += 1024;
+                        buffer = realloc(buffer, buffer_alloc_size);
+                    }
+                    memcpy(buffer + buffer_size, &css_id, HEAP_CSS_ATTRIBUTE_STRIDE);
+                    buffer_size += HEAP_CSS_ATTRIBUTE_STRIDE;
                 } else if (is_separator(*p))
                 {
                     state = CSS_AFTER_PROPERTY;
                     len = p - p_strt;
+                    css_id = css_attrn_hmap_id_get(p_strt, len);
+                    if (buffer_size + HEAP_CSS_ATTRIBUTE_STRIDE + HEAP_CSS_VALUE_STRIDE > buffer_alloc_size)
+                    {
+                        buffer_alloc_size += 1024;
+                        buffer = realloc(buffer, buffer_alloc_size);
+                    }
+                    memcpy(buffer + buffer_size, &css_id, HEAP_CSS_ATTRIBUTE_STRIDE);
+                    buffer_size += HEAP_CSS_ATTRIBUTE_STRIDE;
                 }
                 break;
             case CSS_AFTER_PROPERTY:
                 if (*p == ':') state = CSS_BEFORE_VALUE;
                 break;
             case CSS_BEFORE_VALUE:
+                if (!is_separator(*p))
+                {
+                    state = CSS_IN_VALUE;
+                    p_strt = p;
+                }
                 break;
             case CSS_IN_VALUE:
+                bool pass = false;
+                if (is_separator(*p))
+                {
+                    state = CSS_AFTER_VALUE;
+                    pass = true;
+                } else if (*p == ';')
+                {
+                    state = CSS_BEFORE_PROPERTY;
+                    pass = true;
+                }
+
+                if (pass)
+                {
+                    len = p - p_strt;
+                    if (css_id == cache->CSS_BACKGROUND_COLOR)
+                    {
+                        switch (len)
+                        {
+                            case 7: //+1 accounting for the hex designator #
+                                value = h_2_srgb(p_strt + 1);
+                                break;
+                            case 9:
+                                value = h_2_srgba(p_strt + 1);
+                                break;
+                            default:
+                                //handle exception
+                        }
+                    } //handle more special value
+                    else
+                    {
+                        float f;
+                        s2f_n(p_strt, len, &f);
+                        memcpy(&value, &f, HEAP_CSS_VALUE_STRIDE);
+                    }
+                    memcpy(buffer + buffer_size, &value, HEAP_CSS_VALUE_STRIDE);
+                    buffer_size += HEAP_CSS_VALUE_STRIDE;
+                }
+                break;
+            case CSS_AFTER_VALUE:
+                if (*p == ';') state = CSS_BEFORE_PROPERTY;
                 break;
         }
     }
+
+    HeapHandler64 hh = heap_alloc(app->heap, buffer_size, HEAP_CLASS_HEAP, &app->hflo_queue);
+    memcpy(((Heap *)hh.heap)->mem + hh.a, buffer, hh.s);
+    free(buffer);
+
+    return (HeapHandler16){.heap = hh.heap, .a = hh.a, .s = hh.s};
 }
 
 typedef enum {
@@ -97,7 +173,8 @@ typedef struct {
     uint64_t glb_id;
     const char *tag;
     uint8_t t_size;
-    const char *style;
+    const char style[VALUE_BUFFER_SIZE];
+    uint16_t style_size;
 } BuildDOBJinfo;
 
 DOBJHandler build_dom(BuildDOBJinfo *build_info)
@@ -107,28 +184,41 @@ DOBJHandler build_dom(BuildDOBJinfo *build_info)
         DOBJHandler obj_h = pool_search(build_info->ref_pool, build_info->glb_id);
     } else if (build_info->option & CREATE)
     {
-        DOBJ new_obj = (DOBJ){};
-        if (build_info->option & TAG_NAME)
-        {
-            strcpy(new_obj.tag_name, build_info->tag);
-            new_obj.tag_id = html_tag_hmap_id_get(build_info->tag);
-
-            build_info->option &= ~TAG_NAME;
-        }
-        DOBJHandler obj_h = dobj_pool_alloc(&new_obj, build_info->ref_pool);
-        DOBJPool *p = obj_h.pool;
-        uint64_t id = obj_h.item_index;
-
-        p->tag_ids[id] = html_tag_hmap_id_get(build_info->tag);
-        strncpy((char *)&p->tag_names[id], build_info->tag, build_info->t_size);
+        
 
     }
 }
+typedef struct {
+    DOBJPool *ref_pool;
+    const char *tag;
+    uint8_t t_size;
+    DOBJHandler h_parent;
+} DOBJcreateInfo;
 
+DOBJHandler create_dobj(DOBJcreateInfo *info, App *app)
+{
+    DOBJ new_obj = (DOBJ){};
 
+    strcpy(new_obj.tag_name, info->tag);
+    new_obj.tag_id = html_tag_hmap_id_get(info->tag);
 
+    DOBJHandler h_obj = dobj_pool_alloc(&new_obj, info->ref_pool);
+    DOBJPool *p = h_obj.pool;
+    uint64_t id = h_obj.item_index;
+
+    p->tag_ids[id] = html_tag_hmap_id_get(info->tag);
+    memcpy(&p->tag_names[id], info->tag, info->t_size);
+    p->DOBJHandler_pool_parent[id] = info->h_parent.pool;
+    p->DOBJHandler_item_index_parent[id] = info->h_parent.item_index;
+
+    return h_obj;
+}
+
+//considering removing support for css inline attribute like bgcolor, hidden, align, etc.
 void parse(char *src, uint8_t *dict, uint64_t dict_size, App* app)
 {
+    DOBJPool *pool = app->pool;
+
     uint64_t EOF_i;
     memcpy(&EOF_i, dict + dict_size - DICT_INDEX_WIDTH, DICT_INDEX_WIDTH);
     
@@ -148,7 +238,7 @@ void parse(char *src, uint8_t *dict, uint64_t dict_size, App* app)
     uint64_t end_value_ind;
     char tag_name[256];
     char attribute[256];
-    char attr_value[1024 * 2];
+    char attr_value[VALUE_BUFFER_SIZE];
     uint8_t tag_size;
     uint8_t attr_name_size;
     uint16_t attr_value_size;
@@ -156,6 +246,8 @@ void parse(char *src, uint8_t *dict, uint64_t dict_size, App* app)
     PARSER_STATE state = BEFORE_TAG;
     bool enclosed_value = false;
     bool value_transit = false;
+
+    DOBJHandler o = (DOBJHandler){.pool = NULL};
 
     // uint16_t attr_alloc_size = 128;
     // uint16_t attr_count = 0;
@@ -221,6 +313,15 @@ void parse(char *src, uint8_t *dict, uint64_t dict_size, App* app)
                                 memcpy(tag_name, value + strt_value_ind, tag_size);
                                 tag_name[tag_size++] = '\0';
                                 printf("tag: %s\n", tag_name);
+
+                                DOBJcreateInfo create_info = (DOBJcreateInfo)
+                                {
+                                    .tag = tag_name,
+                                    .t_size = tag_size,
+                                    .ref_pool = pool,
+                                    .h_parent = o
+                                };
+                                o = create_dobj(&create_info, app);
                             }
                             break;
                         case BEFORE_ATTR_NAME:
@@ -305,6 +406,11 @@ void parse(char *src, uint8_t *dict, uint64_t dict_size, App* app)
                                 printf("attribute value: %s\n", attr_value);
 
                                 //process attribute with value
+                                if (strcmp(tag_name, "style"))
+                                {
+                                    // memcpy(build_info.style, attr_value, attr_value_size);
+                                    // build_info.style_size = attr_value_size;
+                                }
                             }
                             break;
                     }

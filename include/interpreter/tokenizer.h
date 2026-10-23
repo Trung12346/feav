@@ -33,6 +33,7 @@ typedef enum {
 
 void tokenize(int argc, char **argv, char *src, uint64_t src_size, char **dst, uint64_t *dst_size, uint8_t **dict, uint64_t *dict_size)
 {
+    printf(" src size from preprocessor after  passed into tokenizer %llu\n", src_size);
     if (argc == 1);
     else
     {

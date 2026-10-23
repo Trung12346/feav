@@ -32,11 +32,11 @@ static inline uint64_t fnv1a_64(const void *data, size_t size)
 #define NO_SEED 0
 
 #if defined(__AES__)
-    #define SEED_CSS_ATTRIBUTE 1073750330ULL
+    #define SEED_CSS_ATTRIBUTE 5368717626ULL
     #define SEED_HTML_TAG 3221225470ULL
 #elif defined(HAVE_ARM_AES)
-    #define SEED_CSS_ATTRIBUTE 39157ULL
-    #define SEED_HTML_TAG 6ULL
+    #define SEED_CSS_ATTRIBUTE 57281ULL
+    #define SEED_HTML_TAG 1ULL
 #else
     #define SEED_CSS_ATTRIBUTE 3221236384ULL
     #define SEED_HTML_TAG 2147483648ULL

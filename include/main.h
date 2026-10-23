@@ -118,4 +118,18 @@ uint32_t h_2_srgb(const char *hex)
         | ascii_map[hex[5]]
     );
 }
+uint32_t h_2_srgba(const char *hex)
+{
+    return (uint32_t)
+    (
+        ascii_map[hex[0]] << 28
+        | ascii_map[hex[1]] << 24
+        | ascii_map[hex[2]] << 20
+        | ascii_map[hex[3]] << 16
+        | ascii_map[hex[4]] << 12
+        | ascii_map[hex[5]] << 8
+        | ascii_map[hex[6]] << 4
+        | ascii_map[hex[7]]
+    );
+}
 #endif

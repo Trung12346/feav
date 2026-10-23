@@ -70,11 +70,11 @@ void layout_stack(DOBJPool *pool, uint64_t p_parent)
         pool->y[id] = y_cursor + MAX(h_child.pool->margin[id].top, prev_element_margin);
         pool->width[id] = content_width - pool->margin[id].left - pool->margin[id].right;
 
-        BHeap *h = pool->p_inner[id].heap;
+        BHeap *h = pool->HeapHandler64_heap_h_inner[id];
         if (h != NULL)
         {
-            HeapHandler64 hh = pool->p_inner[id];
-            const char *p_t = (const char *)h->mem + hh.a;
+            uint64_t a = pool->HeapHandler64_a_h_inner[id];
+            const char *p_t = (const char *)h->mem + a;
             float text_height = layout_text_height(p_t, layout_content_width(h_child));
             printf("textheight %f\n", text_height);
             printf("avaiwidth %f\n", layout_content_width(h_child));

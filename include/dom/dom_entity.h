@@ -225,10 +225,14 @@ DOBJHandler dobj_pool_alloc(DOBJ *obj, DOBJPool *pool)
     working_pool->status_flags[working_index] |= POOL_STATUS_IS_OCCUPIED_BIT;
     strcpy(working_pool->tag_names[working_index], obj->tag_name);
     working_pool->tag_ids[working_index] = obj->tag_id;
-    working_pool->p_attrs[working_index] = obj->p_attr;
-    working_pool->attr_sizes[working_index] = obj->attr_size;
-    working_pool->p_inner[working_index] = obj->p_inner;
-    working_pool->parent[working_index] = obj->p_parent;
+    working_pool->HeapHandler16_heap_h_attrs[working_index] = obj->p_attr.heap;
+    working_pool->HeapHandler16_a_h_attrs[working_index] = obj->p_attr.a;
+    working_pool->HeapHandler16_s_h_attrs[working_index] = obj->p_attr.s;
+    working_pool->HeapHandler64_heap_h_inner[working_index] = obj->p_inner.heap;
+    working_pool->HeapHandler64_a_h_inner[working_index] = obj->p_inner.a;
+    working_pool->HeapHandler64_s_h_inner[working_index] = obj->p_inner.s;
+    working_pool->DOBJHandler_pool_parent[working_index] = obj->p_parent.pool;
+    working_pool->DOBJHandler_item_index_parent[working_index] = obj->p_parent.item_index;
     working_pool->child_count[working_index] = obj->child_count;
     working_pool->life_span_points[working_index] = obj->life_span_point;
 

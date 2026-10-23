@@ -11,6 +11,7 @@
 #define VIEW_PORT_WIDTH 1000
 #define VIEW_PORT_HEIGHT 760
 
+
 typedef struct {
     CSSattribute *ca; //"runtime-enum", enum configuration is dependent on hashing algorithm
     HTMLtag *ha;
@@ -155,10 +156,10 @@ void create_html_hmap(App *app, size_t *size, void **buffer)
         cursor_struct_p++;
         cursor_resrc_p += HTML_TAG_RESRC_STRIDE;
     }
-    void *write_buffer = malloc(sizeof(HTMLtag) + SEED_SIGNATURE_WIDTH);
+    void *write_buffer = malloc(sizeof(HTMLtag) + SEED_SIGNATURE_STRIDE);
     *(uint64_t *)write_buffer = SEED_HTML_TAG;
-    memcpy(write_buffer + SEED_SIGNATURE_WIDTH, app->caches.ha, sizeof(HTMLtag));
-    create_write_file("../assets/html-tags-enum.bin", write_buffer, sizeof(HTMLtag) + SEED_SIGNATURE_WIDTH);
+    memcpy(write_buffer + SEED_SIGNATURE_STRIDE, app->caches.ha, sizeof(HTMLtag));
+    create_write_file("../assets/html-tags-enum.bin", write_buffer, sizeof(HTMLtag) + SEED_SIGNATURE_STRIDE);
 }
 void create_css_hmap(App *app, size_t *size, void **buffer)
 {
@@ -180,10 +181,10 @@ void create_css_hmap(App *app, size_t *size, void **buffer)
         cursor_struct_p++;
         cursor_resrc_p += CSS_ATTRIBUTE_RESRC_STRIDE;
     }
-    void *write_buffer = malloc(sizeof(CSSattribute) + SEED_SIGNATURE_WIDTH);
+    void *write_buffer = malloc(sizeof(CSSattribute) + SEED_SIGNATURE_STRIDE);
     *(uint64_t *)write_buffer = SEED_CSS_ATTRIBUTE;
-    memcpy(write_buffer + SEED_SIGNATURE_WIDTH, app->caches.ca, sizeof(CSSattribute));
-    create_write_file("../assets/css-attributes-enum.bin", write_buffer, sizeof(CSSattribute) + SEED_SIGNATURE_WIDTH);
+    memcpy(write_buffer + SEED_SIGNATURE_STRIDE, app->caches.ca, sizeof(CSSattribute));
+    create_write_file("../assets/css-attributes-enum.bin", write_buffer, sizeof(CSSattribute) + SEED_SIGNATURE_STRIDE);
 }
 void resource_init(App *app)
 {
@@ -199,13 +200,13 @@ void resource_init(App *app)
     {
         buffer = malloc(size);
         file_read("../assets/html-tags-enum.bin", &size, buffer);
-        if (*(uint64_t *)buffer != SEED_HTML_TAG || size != (sizeof(HTMLtag) + SEED_SIGNATURE_WIDTH))
+        if (*(uint64_t *)buffer != SEED_HTML_TAG || size != (sizeof(HTMLtag) + SEED_SIGNATURE_STRIDE))
         {
             free(buffer);
             size = 0;
             buffer = NULL;
             create_html_hmap(app, &size, &buffer);
-        } else memcpy(app->caches.ha, buffer + SEED_SIGNATURE_WIDTH, sizeof(HTMLtag));
+        } else memcpy(app->caches.ha, buffer + SEED_SIGNATURE_STRIDE, sizeof(HTMLtag));
     }
 
     free(buffer);
@@ -220,13 +221,13 @@ void resource_init(App *app)
     {
         buffer = malloc(size);
         file_read("../assets/css-attributes-enum.bin", &size, buffer);
-        if (*(uint64_t *)buffer != SEED_CSS_ATTRIBUTE || size != (sizeof(CSSattribute) + SEED_SIGNATURE_WIDTH))
+        if (*(uint64_t *)buffer != SEED_CSS_ATTRIBUTE || size != (sizeof(CSSattribute) + SEED_SIGNATURE_STRIDE))
         {
             free(buffer);
             size = 0;
             buffer = NULL;
             create_css_hmap(app, &size, &buffer);
-        } else memcpy(app->caches.ca, buffer + SEED_SIGNATURE_WIDTH, sizeof(CSSattribute));
+        } else memcpy(app->caches.ca, buffer + SEED_SIGNATURE_STRIDE, sizeof(CSSattribute));
     }
 }
 

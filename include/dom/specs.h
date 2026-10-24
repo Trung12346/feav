@@ -704,7 +704,7 @@ static inline HeapHandler16 dobj_get_h_attrs(DOBJHandler h)
 {
     DOBJPool *p = h.pool;
     uint16_t i = h.item_index;
-    return (HeapHandler16){.heap = p->HeapHandler16_heap_h_attrs[i], .a = p->HeapHandler16_a_h_attrs[i], .s = p->HeapHandler16_s_h_attrs};
+    return (HeapHandler16){.heap = p->HeapHandler16_heap_h_attrs[i], .a = p->HeapHandler16_a_h_attrs[i], .s = p->HeapHandler16_s_h_attrs[i]};
 }
 static inline HeapHandler64 dobj_get_h_inner(DOBJHandler h)
 {

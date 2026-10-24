@@ -104,6 +104,7 @@ int main(int argc, char **argv)
     {
         // run(&app);
         
+        resource_init(&app.caches);
         dobj_init(&app);
         char *preproced;
         uint64_t size;

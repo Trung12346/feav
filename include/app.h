@@ -7,15 +7,10 @@
 #include "dom/dom_entity.h"
 #include "background_worker/hashmap_cache_update.h"
 #include "windows_utils/file.h"
+#include "cache.h"
 
 #define VIEW_PORT_WIDTH 1000
 #define VIEW_PORT_HEIGHT 760
-
-
-typedef struct {
-    CSSattribute *ca; //"runtime-enum", enum configuration is dependent on hashing algorithm
-    HTMLtag *ha;
-} AppCaches;
 
 typedef struct
 {
@@ -33,7 +28,8 @@ App app_no_args_construct()
     return (App)
     {
         .gpu_select_flag = -1,
-        .vk_process = vk_process_no_args_construct()
+        .vk_process = vk_process_no_args_construct(),
+        .caches = {0}
     };
 }
 static void frame_buffer_size_callback(GLFWwindow *window, int width, int height)
@@ -136,104 +132,9 @@ static void clean_up(App *app)
     glfwTerminate();
 }
 
-void create_html_hmap(App *app, size_t *size, void **buffer)
-{
-    file_read("../assets/html-tags.bin", size, NULL);
-    if (*size == 0)
-    {
-        printf(ERR SYS_DBG_PREFIX" Missing resource \"html-tags.bin\"");
-        exit(1);
-    }
-    *buffer = malloc(*size);
-    file_read("../assets/html-tags.bin", size, *buffer);
-
-    const char *cursor_resrc_p = *buffer;
-    uint16_t *cursor_struct_p = (uint16_t *)app->caches.ha;
-    for (uint8_t i = 0U; i < HTML_TAG_COUNT; i++)
-    {
-        *cursor_struct_p = html_tag_hmap_id_get(cursor_resrc_p);
-
-        cursor_struct_p++;
-        cursor_resrc_p += HTML_TAG_RESRC_STRIDE;
-    }
-    void *write_buffer = malloc(sizeof(HTMLtag) + SEED_SIGNATURE_STRIDE);
-    *(uint64_t *)write_buffer = SEED_HTML_TAG;
-    memcpy(write_buffer + SEED_SIGNATURE_STRIDE, app->caches.ha, sizeof(HTMLtag));
-    create_write_file("../assets/html-tags-enum.bin", write_buffer, sizeof(HTMLtag) + SEED_SIGNATURE_STRIDE);
-}
-void create_css_hmap(App *app, size_t *size, void **buffer)
-{
-    file_read("../assets/css-attributes.bin", size, NULL);
-    if (*size == 0)
-    {
-        printf(ERR SYS_DBG_PREFIX" Missing resource \"css-attributes.bin\"");
-        exit(1);
-    }
-    *buffer = malloc(*size);
-    file_read("../assets/css-attributes.bin", size, *buffer);
-
-    const char *cursor_resrc_p = *buffer;
-    uint16_t *cursor_struct_p = (uint16_t *)app->caches.ca;
-    for (uint8_t i = 0U; i < CSS_ATTRIBUTE_COUNT; i++)
-    {
-        *cursor_struct_p = css_attr_hmap_id_get(cursor_resrc_p);
-
-        cursor_struct_p++;
-        cursor_resrc_p += CSS_ATTRIBUTE_RESRC_STRIDE;
-    }
-    void *write_buffer = malloc(sizeof(CSSattribute) + SEED_SIGNATURE_STRIDE);
-    *(uint64_t *)write_buffer = SEED_CSS_ATTRIBUTE;
-    memcpy(write_buffer + SEED_SIGNATURE_STRIDE, app->caches.ca, sizeof(CSSattribute));
-    create_write_file("../assets/css-attributes-enum.bin", write_buffer, sizeof(CSSattribute) + SEED_SIGNATURE_STRIDE);
-}
-void resource_init(App *app)
-{
-    app->caches.ha = calloc(1, sizeof(HTMLtag));
-
-    size_t size = 0;
-    void *buffer;
-
-    file_read("../assets/html-tags-enum.bin", &size, NULL);
-
-    if (size == 0) create_html_hmap(app, &size, &buffer);
-    else
-    {
-        buffer = malloc(size);
-        file_read("../assets/html-tags-enum.bin", &size, buffer);
-        if (*(uint64_t *)buffer != SEED_HTML_TAG || size != (sizeof(HTMLtag) + SEED_SIGNATURE_STRIDE))
-        {
-            free(buffer);
-            size = 0;
-            buffer = NULL;
-            create_html_hmap(app, &size, &buffer);
-        } else memcpy(app->caches.ha, buffer + SEED_SIGNATURE_STRIDE, sizeof(HTMLtag));
-    }
-
-    free(buffer);
-    buffer = NULL;
-    size = 0;
-
-    app->caches.ca = calloc(1, sizeof(CSSattribute));
-    file_read("../assets/css-attributes-enum.bin", &size, NULL);
-
-    if (size == 0) create_css_hmap(app, &size, &buffer);
-    else
-    {
-        buffer = malloc(size);
-        file_read("../assets/css-attributes-enum.bin", &size, buffer);
-        if (*(uint64_t *)buffer != SEED_CSS_ATTRIBUTE || size != (sizeof(CSSattribute) + SEED_SIGNATURE_STRIDE))
-        {
-            free(buffer);
-            size = 0;
-            buffer = NULL;
-            create_css_hmap(app, &size, &buffer);
-        } else memcpy(app->caches.ca, buffer + SEED_SIGNATURE_STRIDE, sizeof(CSSattribute));
-    }
-}
-
 void run(App *app)
 {
-    resource_init(app);
+    resource_init(&app->caches);
     window_init(&app->window, app);
     dobj_init(app);
     vulkan_init(app);

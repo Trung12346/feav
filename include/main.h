@@ -132,4 +132,17 @@ uint32_t h_2_srgba(const char *hex)
         | ascii_map[hex[7]]
     );
 }
+
+static inline void bm_bit_set(uint64_t *bm, uint64_t i)
+{
+    bm[i >> 6U] |= (uint64_t)1ULL << (i & 63U);
+}
+static inline void bm_bit_clear(uint64_t *bm, uint64_t i)
+{
+    bm[i >> 6U] &= ~((uint64_t)1ULL << (i & 64U));
+}
+static inline bool bm_bit_fetch(uint64_t *bm, uint64_t i)
+{
+    return bm[i >> 6U] & (uint64_t)1ULL << (i & 63U);
+}
 #endif

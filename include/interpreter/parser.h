@@ -195,7 +195,7 @@ typedef struct {
     DOBJHandler h_parent;
 } DOBJcreateInfo;
 
-DOBJHandler create_dobj(DOBJcreateInfo *info, App *app)
+DOBJHandler create_dobj(DOBJcreateInfo *info)
 {
     DOBJ new_obj = (DOBJ){};
 
@@ -247,7 +247,8 @@ void parse(char *src, uint8_t *dict, uint64_t dict_size, App* app)
     bool enclosed_value = false;
     bool value_transit = false;
 
-    DOBJHandler o = (DOBJHandler){.pool = NULL};
+    DOBJHandler o;
+    DOBJHandler p = (DOBJHandler){.pool = NULL};
 
     // uint16_t attr_alloc_size = 128;
     // uint16_t attr_count = 0;
@@ -319,9 +320,10 @@ void parse(char *src, uint8_t *dict, uint64_t dict_size, App* app)
                                     .tag = tag_name,
                                     .t_size = tag_size,
                                     .ref_pool = pool,
-                                    .h_parent = o
+                                    .h_parent = p
                                 };
-                                o = create_dobj(&create_info, app);
+                                o = create_dobj(&create_info);
+                                p = o;
                             }
                             break;
                         case BEFORE_ATTR_NAME:
@@ -419,6 +421,9 @@ void parse(char *src, uint8_t *dict, uint64_t dict_size, App* app)
                 state = BEFORE_TAG;
                 enclosed_value = false;
                 value_transit = false;
+            } else if (token == END_TAG)
+            {
+                p = dobj_get_h_parent(o);
             }
 
 

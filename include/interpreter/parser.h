@@ -247,8 +247,7 @@ void parse(char *src, uint8_t *dict, uint64_t dict_size, App* app)
     bool enclosed_value = false;
     bool value_transit = false;
 
-    DOBJHandler o;
-    DOBJHandler p = (DOBJHandler){.pool = NULL};
+    DOBJHandler o = (DOBJHandler){.pool = NULL};
 
     // uint16_t attr_alloc_size = 128;
     // uint16_t attr_count = 0;
@@ -320,10 +319,18 @@ void parse(char *src, uint8_t *dict, uint64_t dict_size, App* app)
                                     .tag = tag_name,
                                     .t_size = tag_size,
                                     .ref_pool = pool,
-                                    .h_parent = p
+                                    .h_parent = o
                                 };
                                 o = create_dobj(&create_info);
-                                p = o;
+                                if (bm_bit_fetch(app->caches.hsctbm, html_tagn_hmap_id_get(tag_name, tag_size - 1))) o = dobj_get_h_parent(o);
+                                //else p = o;
+                                /*
+                                o = NULL; p = NULL
+                                html -> o = html:0
+                                head -> head.p = o; o = head:1;
+                                meta -> meta.p = o; o = meta:2; o = o.p;
+                                /head -> o = o.p;
+                                */
                             }
                             break;
                         case BEFORE_ATTR_NAME:
@@ -423,7 +430,8 @@ void parse(char *src, uint8_t *dict, uint64_t dict_size, App* app)
                 value_transit = false;
             } else if (token == END_TAG)
             {
-                p = dobj_get_h_parent(o);
+                o = dobj_get_h_parent(o);
+                //o = p;
             }
 
 

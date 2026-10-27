@@ -542,7 +542,7 @@ typedef struct {
     uint16_t free_list_count;
     uint16_t heap_free_list_cache_h[256]; //hashed head local address of the more significant free chunk
     uint16_t heap_free_list_cache_t[256]; //hashed tail local address of the less significant free chunk
-    uint16_t mem[HEAP_SIZE / 2]; //size: 64KB, page size: 2B, minimum allocatable chunk is sizeof(mem) / (UINT16_MAX + 1) = 2B
+    uint16_t mem[HEAP_SIZE / 2]; //size: 64KB, min addressable size: 2B, minimum allocatable chunk is sizeof(mem) / (UINT16_MAX + 1) = 2B
 } Heap;
 typedef struct {
     void *p_prev;
@@ -558,7 +558,7 @@ typedef struct {
     uint8_t heap_free_list_cache_h[256];
     uint8_t heap_free_list_cache_t[256];
 
-    uint64_t mem[BIG_HEAP_SIZE / 8]; //size: 4MB, page size: 8B, desired minimum allocatable chunk is sizeof(mem) / (UINT8_MAX + 1) = 16KB
+    uint64_t mem[BIG_HEAP_SIZE / 8]; //size: 4MB, min addressable size: 8B, desired minimum allocatable chunk is sizeof(mem) / (UINT8_MAX + 1) = 16KB
 } BHeap;
 typedef struct {
     void *p_prev;
@@ -576,7 +576,7 @@ typedef struct {
 
     uint64_t mem[BIG_BIG_HEAP_SIZE / 8]; //size: 256MB, page size: 8B, desired minimum allocatable chunk is sizeof(mem) / (UINT8_MAX + 1) = 1MB
 } BBHeap;
-//allocating less than desired minimum size may lead to key collision of cache, resulting in reduced performance
+//allocating less than desired minimum size may lead to higher chance of key collision of cache, resulting in reduced performance
 
 
 

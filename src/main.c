@@ -103,14 +103,23 @@ int main(int argc, char **argv)
     if (!is_special_op)
     {
         // run(&app);
+        double t0;
+        double t1;
+        double t2;
+        double t3;
+        double t4;
         
         resource_init(&app.caches);
         dobj_init(&app);
+
+        t0 = now_ms();
+
         char *preproced;
         uint64_t size;
         preprocess(preproc_argc, preproc_argv, &preproced, &size);
         printf("src size from preprocessing  %llu\n", size);
 
+        t1 = now_ms();
 
         char *dst;
         uint64_t dst_size;
@@ -118,10 +127,10 @@ int main(int argc, char **argv)
         uint64_t dict_size;
         tokenize(tok_argc, tok_argv, preproced, size, &dst, &dst_size, &dict, &dict_size);
 
-        
+        t2 = now_ms();
         parse(dst, dict, dict_size, &app);
 
-
+        t3 = now_ms();
 
         // dobj_init(&app);
         // HeapHandler64 hh = heap_alloc(app.heap, 8, HEAP_CLASS_HEAP, &app.hflo_queue);
@@ -173,8 +182,13 @@ int main(int argc, char **argv)
         // layout_stack(pool, tree_p[0]);
         
         // dobj_printn((DOBJHandler){.pool = pool, .item_index = 0}, 4);
+
+        printf("preprocessing %.3f\n", t1 - t0);
+        printf("tokenizing %.3f\n", t2 - t1);
+        printf("parsing %.3f\n", t3 - t2);
+
     }
-    //terminate(&app.hflo_queue.worker);
+    terminate(&app.hflo_queue.worker);
     
     
     

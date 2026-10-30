@@ -18,7 +18,7 @@ rmdir /s /q build
 
 mkdir build
 
-gcc -g -std=c11 -march=native -Wall -Wextra ^
+gcc -g -std=c11 -march=native -pthread -Wall -Wextra ^
 src\main.c ^
 -I include ^
 -I C:\VulkanSDK\1.4.357.0\Include ^

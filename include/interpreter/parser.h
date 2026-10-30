@@ -26,8 +26,19 @@ typedef enum {
     CSS_AFTER_VALUE
 } CSS_PARSER_STATE;
 
+
+
 HeapHandler16 css_parse(const char *css, App *app)
 {
+    //css table laid out flat in memory, which this function will save into Heap and spit out HeapHandler16 
+    /*
+      1   2   3   4   5   6   <-- byte
+    | B | B | B | B | B | B |
+      _____   _____________
+        |            |
+CSS identifier  float32 value
+    */
+
     const char *p_strt;
     uint64_t len = 0;
     const char *p = css;
@@ -40,6 +51,8 @@ HeapHandler16 css_parse(const char *css, App *app)
 
     uint16_t css_id;
     uint32_t value;
+
+    bool pass;
 
     for (; *p; p++)
     {
@@ -58,7 +71,7 @@ HeapHandler16 css_parse(const char *css, App *app)
                     state = CSS_BEFORE_VALUE;
                     len = p - p_strt;
                     css_id = css_attrn_hmap_id_get(p_strt, len);
-                    if (buffer_size + HEAP_CSS_ATTRIBUTE_STRIDE > buffer_alloc_size)
+                    if (buffer_size + HEAP_CSS_ATTRIBUTE_STRIDE + HEAP_CSS_VALUE_STRIDE > buffer_alloc_size)
                     {
                         buffer_alloc_size += 1024;
                         buffer = realloc(buffer, buffer_alloc_size);
@@ -90,7 +103,7 @@ HeapHandler16 css_parse(const char *css, App *app)
                 }
                 break;
             case CSS_IN_VALUE:
-                bool pass = false;
+                pass = false;
                 if (is_separator(*p))
                 {
                     state = CSS_AFTER_VALUE;
@@ -135,7 +148,7 @@ HeapHandler16 css_parse(const char *css, App *app)
     }
 
     HeapHandler64 hh = heap_alloc(app->heap, buffer_size, HEAP_CLASS_HEAP, &app->hflo_queue);
-    memcpy(((Heap *)hh.heap)->mem + hh.a, buffer, hh.s);
+    memcpy(((Heap *)hh.heap)->mem + hh.a, buffer, buffer_size);
     free(buffer);
 
     return (HeapHandler16){.heap = hh.heap, .a = hh.a, .s = hh.s};
@@ -152,14 +165,14 @@ typedef enum {
     END
 } PARSER_STATE;
 
-typedef uint8_t BuildDOBJoption; enum {
-    TAG_NAME   = 0b00000001,
-    ATTRIBUTE  = 0b00000010,
-    ATTR_VALUE = 0b00000100,
+// typedef uint8_t BuildDOBJoption; enum {
+//     TAG_NAME   = 0b00000001,
+//     ATTRIBUTE  = 0b00000010,
+//     ATTR_VALUE = 0b00000100,
 
-    CREATE     = 0b00010000,
-    UPDATE     = 0b00100000
-};
+//     CREATE     = 0b00010000,
+//     UPDATE     = 0b00100000
+// };
 /*
       1   2   3   4   5   6   7   8   <-- bit
     | b | b | b | b | b | b | b | b |
@@ -168,7 +181,7 @@ typedef uint8_t BuildDOBJoption; enum {
         type flags    operation mode
 */
 typedef struct {
-    BuildDOBJoption option;
+    // BuildDOBJoption option;
     DOBJPool *ref_pool;
     uint64_t glb_id;
     const char *tag;
@@ -177,17 +190,17 @@ typedef struct {
     uint16_t style_size;
 } BuildDOBJinfo;
 
-DOBJHandler build_dom(BuildDOBJinfo *build_info)
-{
-    if (build_info->option & UPDATE)
-    {
-        DOBJHandler obj_h = pool_search(build_info->ref_pool, build_info->glb_id);
-    } else if (build_info->option & CREATE)
-    {
+// DOBJHandler build_dom(BuildDOBJinfo *build_info)
+// {
+//     if (build_info->option & UPDATE)
+//     {
+//         DOBJHandler obj_h = pool_search(build_info->ref_pool, build_info->glb_id);
+//     } else if (build_info->option & CREATE)
+//     {
         
 
-    }
-}
+//     }
+// }
 typedef struct {
     DOBJPool *ref_pool;
     const char *tag;
@@ -195,7 +208,7 @@ typedef struct {
     DOBJHandler h_parent;
 } DOBJcreateInfo;
 
-DOBJHandler create_dobj(DOBJcreateInfo *info)
+DOBJHandler dobj_create(DOBJcreateInfo *info)
 {
     DOBJ new_obj = (DOBJ){};
 
@@ -212,6 +225,14 @@ DOBJHandler create_dobj(DOBJcreateInfo *info)
     p->DOBJHandler_item_index_parent[id] = info->h_parent.item_index;
 
     return h_obj;
+}
+static inline void dobj_style_insert(DOBJHandler ho, HeapHandler16 hh)
+{
+    DOBJPool *p = ho.pool;
+    poid i = ho.item_index;
+    p->HeapHandler16_a_h_attrs[i] = hh.a;
+    p->HeapHandler16_heap_h_attrs[i] = hh.heap;
+    p->HeapHandler16_s_h_attrs[i] = hh.s;
 }
 
 //considering removing support for css inline attribute like bgcolor, hidden, align, etc.
@@ -236,7 +257,7 @@ void parse(char *src, uint8_t *dict, uint64_t dict_size, App* app)
 
     uint64_t strt_value_ind;
     uint64_t end_value_ind;
-    char tag_name[256];
+    char tag_name[16];
     char attribute[256];
     char attr_value[VALUE_BUFFER_SIZE];
     uint8_t tag_size;
@@ -288,7 +309,7 @@ void parse(char *src, uint8_t *dict, uint64_t dict_size, App* app)
         {
             value = malloc(value_size);
             memcpy(value, src + token_index + TOKEN_WIDTH, value_size);
-            //printf("%s", value);
+            // printf("%s", value);
 
             if (token == START_TAG)
             {
@@ -312,7 +333,7 @@ void parse(char *src, uint8_t *dict, uint64_t dict_size, App* app)
                                 tag_size = end_value_ind - strt_value_ind + 1;
                                 memcpy(tag_name, value + strt_value_ind, tag_size);
                                 tag_name[tag_size++] = '\0';
-                                printf("tag: %s\n", tag_name);
+                                // printf("tag: %s\n", tag_name);
 
                                 DOBJcreateInfo create_info = (DOBJcreateInfo)
                                 {
@@ -321,7 +342,7 @@ void parse(char *src, uint8_t *dict, uint64_t dict_size, App* app)
                                     .ref_pool = pool,
                                     .h_parent = o
                                 };
-                                o = create_dobj(&create_info);
+                                o = dobj_create(&create_info);
                                 if (bm_bit_fetch(app->caches.hsctbm, html_tagn_hmap_id_get(tag_name, tag_size - 1))) o = dobj_get_h_parent(o);
                                 //else p = o;
                                 /*
@@ -350,7 +371,7 @@ void parse(char *src, uint8_t *dict, uint64_t dict_size, App* app)
                                 memcpy(attribute, value + strt_value_ind, attr_name_size);
                                 attribute[attr_name_size++] = '\0';
 
-                                printf("attribute name: %s\n", attribute);
+                                // printf("attribute name: %s\n", attribute);
                             } else if (is_separator(value[i])) //register attribute with unset value
                             {
                                 end_value_ind = i - 1;
@@ -359,7 +380,7 @@ void parse(char *src, uint8_t *dict, uint64_t dict_size, App* app)
                                 attr_name_size = end_value_ind - strt_value_ind + 1;
                                 memcpy(attribute, value + strt_value_ind, attr_name_size);
                                 attribute[attr_name_size++] = '\0';
-                                printf("attribute name: %s\n", attribute);
+                                // printf("attribute name: %s\n", attribute);
                                 //attrs[attr_count] = 
                             }
                             break;
@@ -372,19 +393,19 @@ void parse(char *src, uint8_t *dict, uint64_t dict_size, App* app)
                                 state = IN_ATTR_NAME;
                                 strt_value_ind = i;
                                 //process attribute whose value is not set
-                                if (strcmp(attribute, "hidden"))
+                                if (strcmp(attribute, "hidden") == 0)
                                 {
 
-                                } else if (strcmp(attribute, "disabled"))
+                                } else if (strcmp(attribute, "disabled") == 0)
                                 {
 
-                                } else if (strcmp(attribute, "readonly"))
+                                } else if (strcmp(attribute, "readonly") == 0)
                                 {
                                     
-                                } else if (strcmp(attribute, "selected"))
+                                } else if (strcmp(attribute, "selected") == 0)
                                 {
 
-                                } else if (strcmp(attribute, "checked"))
+                                } else if (strcmp(attribute, "checked") == 0)
                                 {
 
                                 }
@@ -412,13 +433,15 @@ void parse(char *src, uint8_t *dict, uint64_t dict_size, App* app)
                                 attr_value_size = end_value_ind - strt_value_ind + 1;
                                 memcpy(attr_value, value + strt_value_ind, attr_value_size);
                                 attr_value[attr_value_size++] = '\0';
-                                printf("attribute value: %s\n", attr_value);
+                                // printf("attribute value: %s\n", attr_value);
 
                                 //process attribute with value
-                                if (strcmp(tag_name, "style"))
+                                // printf("ATTR NAME: %s\n", attribute);
+                                if (strcmp(attribute, "style") == 0)
                                 {
                                     // memcpy(build_info.style, attr_value, attr_value_size);
                                     // build_info.style_size = attr_value_size;
+                                    dobj_style_insert(o, css_parse(attr_value, app));
                                 }
                             }
                             break;
@@ -432,6 +455,7 @@ void parse(char *src, uint8_t *dict, uint64_t dict_size, App* app)
             {
                 o = dobj_get_h_parent(o);
                 //o = p;
+                
             }
 
 

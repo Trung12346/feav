@@ -8,6 +8,8 @@
 #include "background_worker/hashmap_cache_update.h"
 #include "windows_utils/file.h"
 #include "cache.h"
+#include <time.h>
+#include <stdio.h>
 
 #define VIEW_PORT_WIDTH 1000
 #define VIEW_PORT_HEIGHT 760
@@ -140,6 +142,12 @@ void run(App *app)
     vulkan_init(app);
     main_loop(app);
     clean_up(app);
+}
+
+static double now_ms(void) {
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return ts.tv_sec * 1000.0 + ts.tv_nsec / 1e6;
 }
 
 #endif

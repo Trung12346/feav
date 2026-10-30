@@ -50,21 +50,21 @@ void tokenize(int argc, char **argv, char *src, uint64_t src_size, char **dst, u
     //DICTIONARY LAYOUT
     /*
       1   2   3   4   5   6   7   8   9   10  11  12  13  14  15  16   <-- byte
-    | b | b | b | b | b | b | b | b | b | b | b | b | b | b | b | b |
+    | B | B | B | B | B | B | B | B | B | B | B | B | B | B | B | B |
       _____________________________   _____________________________
                     |                                |
                 CHAR token                    character size
     */
-   /*
+    /*
       1   2   3   4   5   6   7   8   9   <-- byte
-    | b | b | b | b | b | b | b | b | b |
+    | B | B | B | B | B | B | B | B | B |
       _____________________________   _
                     |                 |
                tags token          tag size
     */
-   /*
+    /*
       1   2   3   4   5   6   7   8   <-- byte
-    | b | b | b | b | b | b | b | b |
+    | B | B | B | B | B | B | B | B |
       _____________________________
                     |
                 EOF token

@@ -234,7 +234,6 @@ DOBJHandler dobj_pool_alloc(DOBJ *obj, DOBJPool *pool)
     working_pool->DOBJHandler_pool_parent[working_index] = obj->p_parent.pool;
     working_pool->DOBJHandler_item_index_parent[working_index] = obj->p_parent.item_index;
     working_pool->child_count[working_index] = obj->child_count;
-    working_pool->life_span_points[working_index] = obj->life_span_point;
 
     working_pool->position[working_index] = obj->position;
     working_pool->x[working_index] = obj->x;
@@ -380,7 +379,7 @@ void heap_init(void **heap, void *prev_heap, uint8_t heap_class)
         exit(1); \
     } \
     chunk_count = size / sizeof(HEAP->mem[0]); \
-    printf("chunk_count %u\nmem size %u\n", chunk_count, sizeof(HEAP->mem)); \
+    /*printf("chunk_count %u\nmem size %u\n", chunk_count, sizeof(HEAP->mem));*/ \
     bool chunk_found = false; \
     AcquireSRWLockExclusive(&HEAP->free_list_lock); \
     for (uint##CH_TYPE##_t i = 0; i < HEAP->free_list_count; i++) \
@@ -416,7 +415,7 @@ void heap_init(void **heap, void *prev_heap, uint8_t heap_class)
         } \
         rtn_obj = heap_alloc(HEAP->p_next, size, heap_class, queue); \
     } \
-    queue_submit_hflo \
+    /*queue_submit_hflo \
     ( \
         (BackgroundProcessHFLOqueueSubmitInfo) \
         { \
@@ -424,14 +423,14 @@ void heap_init(void **heap, void *prev_heap, uint8_t heap_class)
             .p_target = HEAP, \
             .p_queue = queue \
         } \
-    ); \
+    );*/ \
 }
 HeapHandler64 heap_alloc(void *heap, size_t size, uint8_t heap_class, BackgroundProcessHFLOqueue *queue)
 {
     HeapHandler64 rtn_obj = {0};
 
     size_t chunk_count;
-    printf("inside heap_alloc %u\n", rtn_obj.s);
+    // printf("inside heap_alloc %u\n", rtn_obj.s);
     switch (heap_class)
     {
         case HEAP_CLASS_HEAP:

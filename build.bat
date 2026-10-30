@@ -1,6 +1,6 @@
 del build\main.exe
 
-gcc -g -std=c11 -march=native ^
+gcc -g -std=c11 -march=native -pthread ^
 src\main.c ^
 dependencies\ryu\ryu\s2f.c ^
 dependencies\ryu\ryu\s2d.c ^

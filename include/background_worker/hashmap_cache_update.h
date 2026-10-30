@@ -179,15 +179,19 @@ void queue_submit_hflo(BackgroundProcessHFLOqueueSubmitInfo info)
 {
     Worker *w = &info.p_queue->worker;
     BackgroundProcessHFLOqueue *queue = info.p_queue;
-    atomic_store(&w->work, 1);
+    
+    
+    atomic_store(&queue->queue_buffer[queue->queue_submit_index], info.p_target);
+    atomic_store(&queue->heap_class[queue->queue_submit_index], info.class);
+    
     atomic_fetch_add(&queue->queue_submit_index, 1);
     if (queue->queue_submit_index == queue->queue_worker_index)
     {
         printf(ERR SYS_DBG_PREFIX" Background process queue buffer overflowed");
         exit(1);
     }
-    atomic_store(&queue->queue_buffer[queue->queue_submit_index], info.p_target);
-    atomic_store(&queue->heap_class[queue->queue_submit_index], info.class);
+
+    atomic_store(&w->work, 1);
     SetEvent(w->event);
 }
 //future note: steal vulkan queue so worker is capable of handling awaiting requests appropriately too

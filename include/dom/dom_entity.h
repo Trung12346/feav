@@ -223,7 +223,8 @@ DOBJHandler dobj_pool_alloc(DOBJ *obj, DOBJPool *pool)
     }
     working_pool->live_objects++;
     working_pool->status_flags[working_index] |= POOL_STATUS_IS_OCCUPIED_BIT;
-    strcpy(working_pool->tag_names[working_index], obj->tag_name);
+    // strcpy(working_pool->tag_names[working_index], obj->tag_name);
+    if (!obj->tag_id) memcpy(working_pool->tag_names[working_index], obj->tag_name, obj->t_size);
     working_pool->tag_ids[working_index] = obj->tag_id;
     working_pool->HeapHandler16_heap_h_attrs[working_index] = obj->p_attr.heap;
     working_pool->HeapHandler16_a_h_attrs[working_index] = obj->p_attr.a;

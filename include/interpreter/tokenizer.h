@@ -129,7 +129,7 @@ void tokenize(int argc, char **argv, char *src, uint64_t src_size, char **dst, u
             tag_value = malloc(++tag_size);
             tag_value[tag_size - 1] = '\0';
             memcpy(tag_value, src + strt_tag_ind, tag_size - 1);
-            printf("tag: %s\n", tag_value);
+            // printf("tag: %s\n", tag_value);
 
             if (*dst_size + TOKEN_WIDTH > dst_alloc_size)
             {
@@ -154,14 +154,16 @@ void tokenize(int argc, char **argv, char *src, uint64_t src_size, char **dst, u
             }
 
             memcpy(insert_p, &token, TOKEN_WIDTH);
-            (*dict)[(*dict_size)++] = insert_i;
-            (*dict)[(*dict_size)++] = insert_i >> HALFWORD_WIDTH;
-            (*dict)[(*dict_size)++] = insert_i >> HALFWORD_WIDTH * 2;
-            (*dict)[(*dict_size)++] = insert_i >> HALFWORD_WIDTH * 3;
-            (*dict)[(*dict_size)++] = insert_i >> HALFWORD_WIDTH * 4;
-            (*dict)[(*dict_size)++] = insert_i >> HALFWORD_WIDTH * 5;
-            (*dict)[(*dict_size)++] = insert_i >> HALFWORD_WIDTH * 6;
-            (*dict)[(*dict_size)++] = insert_i >> HALFWORD_WIDTH * 7;
+            // (*dict)[(*dict_size)++] = insert_i;
+            // (*dict)[(*dict_size)++] = insert_i >> HALFWORD_WIDTH;
+            // (*dict)[(*dict_size)++] = insert_i >> HALFWORD_WIDTH * 2;
+            // (*dict)[(*dict_size)++] = insert_i >> HALFWORD_WIDTH * 3;
+            // (*dict)[(*dict_size)++] = insert_i >> HALFWORD_WIDTH * 4;
+            // (*dict)[(*dict_size)++] = insert_i >> HALFWORD_WIDTH * 5;
+            // (*dict)[(*dict_size)++] = insert_i >> HALFWORD_WIDTH * 6;
+            // (*dict)[(*dict_size)++] = insert_i >> HALFWORD_WIDTH * 7;
+            memcpy(*dict + *dict_size, &insert_i, 8);
+            *dict_size += 8;
             *dst_size += TOKEN_WIDTH;
 
             if (*dst_size + tag_size > dst_alloc_size)
@@ -202,7 +204,7 @@ void tokenize(int argc, char **argv, char *src, uint64_t src_size, char **dst, u
             char_value = malloc(++char_size);
             char_value[char_size - 1] = '\0';
             memcpy(char_value, src + strt_char_ind, char_size - 1);
-            printf("char: %s\n", char_value);
+            // printf("char: %s\n", char_value);
 
             if (*dst_size + TOKEN_WIDTH > dst_alloc_size)
             {
@@ -218,14 +220,16 @@ void tokenize(int argc, char **argv, char *src, uint64_t src_size, char **dst, u
             insert_i = *dst_size;
             uint8_t token = CHARACTER;
             memcpy(insert_p, &token, TOKEN_WIDTH);
-            (*dict)[(*dict_size)++] = insert_i;
-            (*dict)[(*dict_size)++] = insert_i >> HALFWORD_WIDTH;
-            (*dict)[(*dict_size)++] = insert_i >> HALFWORD_WIDTH * 2;
-            (*dict)[(*dict_size)++] = insert_i >> HALFWORD_WIDTH * 3;
-            (*dict)[(*dict_size)++] = insert_i >> HALFWORD_WIDTH * 4;
-            (*dict)[(*dict_size)++] = insert_i >> HALFWORD_WIDTH * 5;
-            (*dict)[(*dict_size)++] = insert_i >> HALFWORD_WIDTH * 6;
-            (*dict)[(*dict_size)++] = insert_i >> HALFWORD_WIDTH * 7;
+            // (*dict)[(*dict_size)++] = insert_i;
+            // (*dict)[(*dict_size)++] = insert_i >> HALFWORD_WIDTH;
+            // (*dict)[(*dict_size)++] = insert_i >> HALFWORD_WIDTH * 2;
+            // (*dict)[(*dict_size)++] = insert_i >> HALFWORD_WIDTH * 3;
+            // (*dict)[(*dict_size)++] = insert_i >> HALFWORD_WIDTH * 4;
+            // (*dict)[(*dict_size)++] = insert_i >> HALFWORD_WIDTH * 5;
+            // (*dict)[(*dict_size)++] = insert_i >> HALFWORD_WIDTH * 6;
+            // (*dict)[(*dict_size)++] = insert_i >> HALFWORD_WIDTH * 7;
+            memcpy(*dict + *dict_size, &insert_i, 8);
+            *dict_size += 8;
             *dst_size += TOKEN_WIDTH;
 
             if (*dst_size + char_size > dst_alloc_size)
@@ -240,14 +244,16 @@ void tokenize(int argc, char **argv, char *src, uint64_t src_size, char **dst, u
             }
             insert_p = *dst + *dst_size;
             memcpy(insert_p, char_value, char_size);
-            (*dict)[(*dict_size)++] = char_size;
-            (*dict)[(*dict_size)++] = char_size >> HALFWORD_WIDTH;
-            (*dict)[(*dict_size)++] = char_size >> HALFWORD_WIDTH * 2;
-            (*dict)[(*dict_size)++] = char_size >> HALFWORD_WIDTH * 3;
-            (*dict)[(*dict_size)++] = char_size >> HALFWORD_WIDTH * 4;
-            (*dict)[(*dict_size)++] = char_size >> HALFWORD_WIDTH * 5;
-            (*dict)[(*dict_size)++] = char_size >> HALFWORD_WIDTH * 6;
-            (*dict)[(*dict_size)++] = char_size >> HALFWORD_WIDTH * 7;
+            // (*dict)[(*dict_size)++] = char_size;
+            // (*dict)[(*dict_size)++] = char_size >> HALFWORD_WIDTH;
+            // (*dict)[(*dict_size)++] = char_size >> HALFWORD_WIDTH * 2;
+            // (*dict)[(*dict_size)++] = char_size >> HALFWORD_WIDTH * 3;
+            // (*dict)[(*dict_size)++] = char_size >> HALFWORD_WIDTH * 4;
+            // (*dict)[(*dict_size)++] = char_size >> HALFWORD_WIDTH * 5;
+            // (*dict)[(*dict_size)++] = char_size >> HALFWORD_WIDTH * 6;
+            // (*dict)[(*dict_size)++] = char_size >> HALFWORD_WIDTH * 7;
+            memcpy(*dict + *dict_size, &char_size, 8);
+            *dict_size += 8;
             *dst_size += char_size;
             
             strt_char_ind = 0;
@@ -275,14 +281,16 @@ void tokenize(int argc, char **argv, char *src, uint64_t src_size, char **dst, u
     insert_i = *dst_size;
     uint8_t token = TOK_EOF;
     memcpy(insert_p, &token, TOKEN_WIDTH);
-    (*dict)[(*dict_size)++] = insert_i;
-    (*dict)[(*dict_size)++] = insert_i >> HALFWORD_WIDTH;
-    (*dict)[(*dict_size)++] = insert_i >> HALFWORD_WIDTH * 2;
-    (*dict)[(*dict_size)++] = insert_i >> HALFWORD_WIDTH * 3;
-    (*dict)[(*dict_size)++] = insert_i >> HALFWORD_WIDTH * 4;
-    (*dict)[(*dict_size)++] = insert_i >> HALFWORD_WIDTH * 5;
-    (*dict)[(*dict_size)++] = insert_i >> HALFWORD_WIDTH * 6;
-    (*dict)[(*dict_size)++] = insert_i >> HALFWORD_WIDTH * 7;
+    // (*dict)[(*dict_size)++] = insert_i;
+    // (*dict)[(*dict_size)++] = insert_i >> HALFWORD_WIDTH;
+    // (*dict)[(*dict_size)++] = insert_i >> HALFWORD_WIDTH * 2;
+    // (*dict)[(*dict_size)++] = insert_i >> HALFWORD_WIDTH * 3;
+    // (*dict)[(*dict_size)++] = insert_i >> HALFWORD_WIDTH * 4;
+    // (*dict)[(*dict_size)++] = insert_i >> HALFWORD_WIDTH * 5;
+    // (*dict)[(*dict_size)++] = insert_i >> HALFWORD_WIDTH * 6;
+    // (*dict)[(*dict_size)++] = insert_i >> HALFWORD_WIDTH * 7;
+    memcpy(*dict + *dict_size, &insert_i, 8);
+    *dict_size += 8;
     *dst_size += TOKEN_WIDTH;
 
     

@@ -28,7 +28,7 @@ typedef enum {
 
 
 
-HeapHandler16 css_parse(const char *css, App *app)
+HeapHandler16 css_parse(const char *css, size_t size, App *app)
 {
     //css table laid out flat in memory, which this function will save into Heap and spit out HeapHandler16 
     /*
@@ -42,6 +42,7 @@ CSS identifier  float32 value
     const char *p_strt;
     uint64_t len = 0;
     const char *p = css;
+    const char *cap = p + size;
     CSS_PARSER_STATE state = CSS_BEFORE_PROPERTY;
     CSSattribute *cache = app->caches.ca;
 
@@ -54,7 +55,7 @@ CSS identifier  float32 value
 
     bool pass;
 
-    for (; *p; p++)
+    for (; p < cap; p++)
     {
         switch (state)
         {
@@ -208,21 +209,23 @@ typedef struct {
     DOBJHandler h_parent;
 } DOBJcreateInfo;
 
-DOBJHandler dobj_create(DOBJcreateInfo *info)
+static inline DOBJHandler dobj_create(DOBJcreateInfo *info)
 {
     DOBJ new_obj = (DOBJ){};
 
-    strcpy(new_obj.tag_name, info->tag);
-    new_obj.tag_id = html_tag_hmap_id_get(info->tag);
+    //strcpy(new_obj.tag_name, info->tag);
+    new_obj.tag_id = html_tagn_hmap_id_get(info->tag, info->t_size);
+    new_obj.t_size = info->t_size;
+    new_obj.p_parent = info->h_parent;
 
     DOBJHandler h_obj = dobj_pool_alloc(&new_obj, info->ref_pool);
-    DOBJPool *p = h_obj.pool;
-    uint64_t id = h_obj.item_index;
+    // DOBJPool *p = h_obj.pool;
+    // uint64_t id = h_obj.item_index;
 
-    p->tag_ids[id] = html_tag_hmap_id_get(info->tag);
-    memcpy(&p->tag_names[id], info->tag, info->t_size);
-    p->DOBJHandler_pool_parent[id] = info->h_parent.pool;
-    p->DOBJHandler_item_index_parent[id] = info->h_parent.item_index;
+    // p->tag_ids[id] = html_tag_hmap_id_get(info->tag);
+    // memcpy(&p->tag_names[id], info->tag, info->t_size);
+    // p->DOBJHandler_pool_parent[id] = info->h_parent.pool;
+    // p->DOBJHandler_item_index_parent[id] = info->h_parent.item_index;
 
     return h_obj;
 }
@@ -257,9 +260,11 @@ void parse(char *src, uint8_t *dict, uint64_t dict_size, App* app)
 
     uint64_t strt_value_ind;
     uint64_t end_value_ind;
-    char tag_name[16];
-    char attribute[256];
-    char attr_value[VALUE_BUFFER_SIZE];
+    //char tag_name[16];
+    const char *tag_name;
+    //char attribute[256];
+    const char *attribute;
+    const char *attr_value;
     uint8_t tag_size;
     uint8_t attr_name_size;
     uint16_t attr_value_size;
@@ -307,8 +312,9 @@ void parse(char *src, uint8_t *dict, uint64_t dict_size, App* app)
         }
         if (value_size != 0)
         {
-            value = malloc(value_size);
-            memcpy(value, src + token_index + TOKEN_WIDTH, value_size);
+            //value = malloc(value_size);
+            value = src + token_index + TOKEN_WIDTH;
+            //memcpy(value, src + token_index + TOKEN_WIDTH, value_size);
             // printf("%s", value);
 
             if (token == START_TAG)
@@ -327,13 +333,13 @@ void parse(char *src, uint8_t *dict, uint64_t dict_size, App* app)
                         case IN_TAG:
                             if (is_separator(value[i]))
                             {
-                                end_value_ind = i - 1;
+                                end_value_ind = i;
                                 state = BEFORE_ATTR_NAME;
 
-                                tag_size = end_value_ind - strt_value_ind + 1;
-                                memcpy(tag_name, value + strt_value_ind, tag_size);
-                                tag_name[tag_size++] = '\0';
-                                // printf("tag: %s\n", tag_name);
+                                tag_size = end_value_ind - strt_value_ind;
+                                //memcpy(tag_name, value + strt_value_ind, tag_size);
+                                //tag_name[tag_size++] = '\0';
+                                tag_name = value + strt_value_ind;
 
                                 DOBJcreateInfo create_info = (DOBJcreateInfo)
                                 {
@@ -343,7 +349,7 @@ void parse(char *src, uint8_t *dict, uint64_t dict_size, App* app)
                                     .h_parent = o
                                 };
                                 o = dobj_create(&create_info);
-                                if (bm_bit_fetch(app->caches.hsctbm, html_tagn_hmap_id_get(tag_name, tag_size - 1))) o = dobj_get_h_parent(o);
+                                if (bm_bit_fetch(app->caches.hsctbm, o.pool->tag_ids[o.item_index])) o = dobj_get_h_parent(o);
                                 //else p = o;
                                 /*
                                 o = NULL; p = NULL
@@ -364,24 +370,24 @@ void parse(char *src, uint8_t *dict, uint64_t dict_size, App* app)
                         case IN_ATTR_NAME:
                             if (value[i] == '=') //transitioning from reading attribute name to attribute value
                             {
-                                end_value_ind = i - 1;
+                                end_value_ind = i;
                                 state = BEFORE_ATTR_VALUE;
 
-                                attr_name_size = end_value_ind - strt_value_ind + 1;
-                                memcpy(attribute, value + strt_value_ind, attr_name_size);
-                                attribute[attr_name_size++] = '\0';
+                                attr_name_size = end_value_ind - strt_value_ind;
+                                // memcpy(attribute, value + strt_value_ind, attr_name_size);
+                                // attribute[attr_name_size++] = '\0';
 
                                 // printf("attribute name: %s\n", attribute);
+                                attribute = value + strt_value_ind;
                             } else if (is_separator(value[i])) //register attribute with unset value
                             {
-                                end_value_ind = i - 1;
+                                end_value_ind = i;
                                 state = AFTER_ATTR_NAME;
 
-                                attr_name_size = end_value_ind - strt_value_ind + 1;
-                                memcpy(attribute, value + strt_value_ind, attr_name_size);
-                                attribute[attr_name_size++] = '\0';
-                                // printf("attribute name: %s\n", attribute);
-                                //attrs[attr_count] = 
+                                attr_name_size = end_value_ind - strt_value_ind;
+                                // memcpy(attribute, value + strt_value_ind, attr_name_size);
+                                // attribute[attr_name_size++] = '\0';
+                                attribute = value + strt_value_ind;
                             }
                             break;
                         case AFTER_ATTR_NAME:
@@ -393,19 +399,19 @@ void parse(char *src, uint8_t *dict, uint64_t dict_size, App* app)
                                 state = IN_ATTR_NAME;
                                 strt_value_ind = i;
                                 //process attribute whose value is not set
-                                if (strcmp(attribute, "hidden") == 0)
+                                if (strncmp(attribute, "hidden", attr_name_size) == 0)
                                 {
 
-                                } else if (strcmp(attribute, "disabled") == 0)
+                                } else if (strncmp(attribute, "disabled", attr_name_size) == 0)
                                 {
 
-                                } else if (strcmp(attribute, "readonly") == 0)
+                                } else if (strncmp(attribute, "readonly", attr_name_size) == 0)
                                 {
                                     
-                                } else if (strcmp(attribute, "selected") == 0)
+                                } else if (strncmp(attribute, "selected", attr_name_size) == 0)
                                 {
 
-                                } else if (strcmp(attribute, "checked") == 0)
+                                } else if (strncmp(attribute, "checked", attr_name_size) == 0)
                                 {
 
                                 }
@@ -426,22 +432,22 @@ void parse(char *src, uint8_t *dict, uint64_t dict_size, App* app)
                         case IN_ATTR_VALUE:
                             if (value[i] == '\'' || value[i] == '"' || (is_separator(value[i]) && !enclosed_value))
                             {
-                                end_value_ind = i - 1;
+                                end_value_ind = i;
                                 enclosed_value = false;
                                 state = BEFORE_ATTR_NAME;
 
-                                attr_value_size = end_value_ind - strt_value_ind + 1;
-                                memcpy(attr_value, value + strt_value_ind, attr_value_size);
-                                attr_value[attr_value_size++] = '\0';
+                                attr_value_size = end_value_ind - strt_value_ind;
+                                // memcpy(attr_value, value + strt_value_ind, attr_value_size);
+                                // attr_value[attr_value_size++] = '\0';
                                 // printf("attribute value: %s\n", attr_value);
 
                                 //process attribute with value
                                 // printf("ATTR NAME: %s\n", attribute);
-                                if (strcmp(attribute, "style") == 0)
+                                if (strncmp(attribute, "style", attr_value_size) == 0)
                                 {
                                     // memcpy(build_info.style, attr_value, attr_value_size);
                                     // build_info.style_size = attr_value_size;
-                                    dobj_style_insert(o, css_parse(attr_value, app));
+                                    dobj_style_insert(o, css_parse(attr_value, attr_value_size, app));
                                 }
                             }
                             break;
@@ -454,12 +460,9 @@ void parse(char *src, uint8_t *dict, uint64_t dict_size, App* app)
             } else if (token == END_TAG)
             {
                 o = dobj_get_h_parent(o);
-                //o = p;
-                
+                //o = p;     
             }
-
-
-            free(value);
+            //free(value);
             value = NULL;
             
         }

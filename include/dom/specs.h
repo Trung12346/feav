@@ -658,12 +658,13 @@ typedef struct {
 } DOBJHandler;
 
 typedef struct {
-    char tag_name[16];
+    const char *tag_name;
+    uint8_t t_size;
     htmltag_t tag_id;
     HeapHandler16 p_attr;
     HeapHandler64 p_inner;
     DOBJHandler p_parent;
-    uint16_t child_count;
+    UINTx_T(MAX_CHILD_VAR_WIDTH) child_count;
 
     CSSattributePosition position;
     float x;

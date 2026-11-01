@@ -239,9 +239,10 @@ static inline void dobj_style_insert(DOBJHandler ho, HeapHandler16 hh)
 }
 
 //considering removing support for css inline attribute like bgcolor, hidden, align, etc.
-void parse(char *src, uint8_t *dict, uint64_t dict_size, App* app)
+void parse(char *src, uint8_t *dict, uint64_t dict_size, App* app, BHeap **h)
 {
     DOBJPool *pool = app->pool;
+    heap_init((void **)h, NULL, HEAP_CLASS_BIG_HEAP);
 
     uint64_t EOF_i;
     memcpy(&EOF_i, dict + dict_size - DICT_INDEX_WIDTH, DICT_INDEX_WIDTH);
@@ -350,6 +351,18 @@ void parse(char *src, uint8_t *dict, uint64_t dict_size, App* app)
                                 };
                                 o = dobj_create(&create_info);
                                 if (bm_bit_fetch(app->caches.hsctbm, o.pool->tag_ids[o.item_index])) o = dobj_get_h_parent(o);
+                                DOBJPool *p = o.pool;
+                                poid i = o.item_index;
+                                if (o.pool->tag_ids[o.item_index] == app->caches.ha->HTML_HTML)
+                                {
+                                    int w;
+                                    int h;
+                                    glfwGetWindowSize(app->window, &w, &h);
+                                    p->width[i] = (float)w;
+                                    p->height[i] = (float)h;
+                                } else {
+                                    p->DOBJHandler_pool_parent[i]->child_count[p->DOBJHandler_item_index_parent[i]]++;
+                                }
                                 //else p = o;
                                 /*
                                 o = NULL; p = NULL
@@ -457,6 +470,10 @@ void parse(char *src, uint8_t *dict, uint64_t dict_size, App* app)
                 state = BEFORE_TAG;
                 enclosed_value = false;
                 value_transit = false;
+            } else if (token == CHARACTER)
+            {
+                HeapHandler64 hh = heap_alloc((void *)*h, value_size, HEAP_CLASS_BIG_HEAP, &app->hflo_queue);
+                memcpy(((BHeap *)hh.heap)->mem + hh.a, value, value_size);
             } else if (token == END_TAG)
             {
                 o = dobj_get_h_parent(o);

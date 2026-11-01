@@ -31,6 +31,11 @@ typedef enum {
     TOK_EOF = 0x05U,
 } Token;
 
+bool is_whitespace(char c)
+{
+    return (c == ' ' || c == '\n' || c == '\r');
+}
+
 void tokenize(int argc, char **argv, char *src, uint64_t src_size, char **dst, uint64_t *dst_size, uint8_t **dict, uint64_t *dict_size)
 {
     printf(" src size from preprocessor after  passed into tokenizer %llu\n", src_size);
@@ -91,6 +96,7 @@ void tokenize(int argc, char **argv, char *src, uint64_t src_size, char **dst, u
     uint64_t char_size;
     char *char_value;
     bool end_char_record_flag = false;
+    bool in_whitespace = false;
     char* insert_p;
     uint64_t insert_i;
 
@@ -111,6 +117,7 @@ void tokenize(int argc, char **argv, char *src, uint64_t src_size, char **dst, u
         {
             strt_tag_ind = i + 1;
             tok_in_tag = true;
+
             if (!end_char_record_flag && tok_in_char != 0) end_char_record_flag = true;
         } else if (!tok_in_str && src[i] == '>' && tok_in_tag && end_tag_ind == 0)
         {
@@ -191,78 +198,98 @@ void tokenize(int argc, char **argv, char *src, uint64_t src_size, char **dst, u
             tag_value = NULL;
         } else if (!tok_in_tag && !tok_in_char)
         {
-            tok_in_char = true;
-            strt_char_ind = i;
+            bool iws = is_whitespace(src[i]);
+            if (!iws)
+            {
+                tok_in_char = true;
+                strt_char_ind = i;
+            }
+        }
+         else if (tok_in_char)
+        {
+            if (is_whitespace(src[i]) && !in_whitespace)
+            {
+                end_char_ind = i;
+                in_whitespace = true;
+            } else if (!is_whitespace(src[i])) in_whitespace = false;
         }
 
         if (end_char_record_flag)
         {
             end_char_record_flag = false;
             tok_in_char = false;
-            end_char_ind = i - 1;
-            char_size = end_char_ind - strt_char_ind + 1;
-            char_value = malloc(++char_size);
-            char_value[char_size - 1] = '\0';
-            memcpy(char_value, src + strt_char_ind, char_size - 1);
-            // printf("char: %s\n", char_value);
-
-            if (*dst_size + TOKEN_WIDTH > dst_alloc_size)
-            {
-                dst_alloc_size += KB;
-                *dst = realloc(*dst, dst_alloc_size);
-            }
-            if (*dict_size + 8 > dict_alloc_size)
-            {
-                dict_alloc_size += KB;
-                *dict = realloc(*dict, dict_alloc_size);
-            }
-            insert_p = *dst + *dst_size;
-            insert_i = *dst_size;
-            uint8_t token = CHARACTER;
-            memcpy(insert_p, &token, TOKEN_WIDTH);
-            // (*dict)[(*dict_size)++] = insert_i;
-            // (*dict)[(*dict_size)++] = insert_i >> HALFWORD_WIDTH;
-            // (*dict)[(*dict_size)++] = insert_i >> HALFWORD_WIDTH * 2;
-            // (*dict)[(*dict_size)++] = insert_i >> HALFWORD_WIDTH * 3;
-            // (*dict)[(*dict_size)++] = insert_i >> HALFWORD_WIDTH * 4;
-            // (*dict)[(*dict_size)++] = insert_i >> HALFWORD_WIDTH * 5;
-            // (*dict)[(*dict_size)++] = insert_i >> HALFWORD_WIDTH * 6;
-            // (*dict)[(*dict_size)++] = insert_i >> HALFWORD_WIDTH * 7;
-            memcpy(*dict + *dict_size, &insert_i, 8);
-            *dict_size += 8;
-            *dst_size += TOKEN_WIDTH;
-
-            if (*dst_size + char_size > dst_alloc_size)
-            {
-                dst_alloc_size += KB;
-                *dst = realloc(*dst, dst_alloc_size);
-            }
-            if (*dict_size + 8 > dict_alloc_size)
-            {
-                dict_alloc_size += KB;
-                *dict = realloc(*dict, dict_alloc_size);
-            }
-            insert_p = *dst + *dst_size;
-            memcpy(insert_p, char_value, char_size);
-            // (*dict)[(*dict_size)++] = char_size;
-            // (*dict)[(*dict_size)++] = char_size >> HALFWORD_WIDTH;
-            // (*dict)[(*dict_size)++] = char_size >> HALFWORD_WIDTH * 2;
-            // (*dict)[(*dict_size)++] = char_size >> HALFWORD_WIDTH * 3;
-            // (*dict)[(*dict_size)++] = char_size >> HALFWORD_WIDTH * 4;
-            // (*dict)[(*dict_size)++] = char_size >> HALFWORD_WIDTH * 5;
-            // (*dict)[(*dict_size)++] = char_size >> HALFWORD_WIDTH * 6;
-            // (*dict)[(*dict_size)++] = char_size >> HALFWORD_WIDTH * 7;
-            memcpy(*dict + *dict_size, &char_size, 8);
-            *dict_size += 8;
-            *dst_size += char_size;
+            //end_char_ind = i - 1;
+            if (!in_whitespace) end_char_ind = i;
             
+            if (end_char_ind < strt_char_ind);
+            else
+            {
+                char_size = end_char_ind - strt_char_ind;
+                char_value = malloc(++char_size);
+                char_value[char_size - 1] = '\0';
+                memcpy(char_value, src + strt_char_ind, char_size - 1);
+                // printf("char: %s\n", char_value);
+
+                if (*dst_size + TOKEN_WIDTH > dst_alloc_size)
+                {
+                    dst_alloc_size += KB;
+                    *dst = realloc(*dst, dst_alloc_size);
+                }
+                if (*dict_size + 8 > dict_alloc_size)
+                {
+                    dict_alloc_size += KB;
+                    *dict = realloc(*dict, dict_alloc_size);
+                }
+                insert_p = *dst + *dst_size;
+                insert_i = *dst_size;
+                uint8_t token = CHARACTER;
+                memcpy(insert_p, &token, TOKEN_WIDTH);
+                // (*dict)[(*dict_size)++] = insert_i;
+                // (*dict)[(*dict_size)++] = insert_i >> HALFWORD_WIDTH;
+                // (*dict)[(*dict_size)++] = insert_i >> HALFWORD_WIDTH * 2;
+                // (*dict)[(*dict_size)++] = insert_i >> HALFWORD_WIDTH * 3;
+                // (*dict)[(*dict_size)++] = insert_i >> HALFWORD_WIDTH * 4;
+                // (*dict)[(*dict_size)++] = insert_i >> HALFWORD_WIDTH * 5;
+                // (*dict)[(*dict_size)++] = insert_i >> HALFWORD_WIDTH * 6;
+                // (*dict)[(*dict_size)++] = insert_i >> HALFWORD_WIDTH * 7;
+                memcpy(*dict + *dict_size, &insert_i, 8);
+                *dict_size += 8;
+                *dst_size += TOKEN_WIDTH;
+
+                if (*dst_size + char_size > dst_alloc_size)
+                {
+                    dst_alloc_size += KB;
+                    *dst = realloc(*dst, dst_alloc_size);
+                }
+                if (*dict_size + 8 > dict_alloc_size)
+                {
+                    dict_alloc_size += KB;
+                    *dict = realloc(*dict, dict_alloc_size);
+                }
+                insert_p = *dst + *dst_size;
+                memcpy(insert_p, char_value, char_size);
+                // (*dict)[(*dict_size)++] = char_size;
+                // (*dict)[(*dict_size)++] = char_size >> HALFWORD_WIDTH;
+                // (*dict)[(*dict_size)++] = char_size >> HALFWORD_WIDTH * 2;
+                // (*dict)[(*dict_size)++] = char_size >> HALFWORD_WIDTH * 3;
+                // (*dict)[(*dict_size)++] = char_size >> HALFWORD_WIDTH * 4;
+                // (*dict)[(*dict_size)++] = char_size >> HALFWORD_WIDTH * 5;
+                // (*dict)[(*dict_size)++] = char_size >> HALFWORD_WIDTH * 6;
+                // (*dict)[(*dict_size)++] = char_size >> HALFWORD_WIDTH * 7;
+                memcpy(*dict + *dict_size, &char_size, 8);
+                *dict_size += 8;
+                *dst_size += char_size;
+
+                free(char_value);
+            }
             strt_char_ind = 0;
             char_size = 0;
             end_char_ind = 0;
             insert_p = NULL;
             insert_i = 0;
-            free(char_value);
+            
             char_value = NULL;
+            in_whitespace = false;
         }
     }
     

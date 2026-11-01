@@ -109,8 +109,11 @@ int main(int argc, char **argv)
         double t3;
         double t4;
         
+        //window_init(&app);
         resource_init(&app.caches);
         dobj_init(&app);
+
+        BHeap *dom_asset;
 
         t0 = now_ms();
 
@@ -128,7 +131,7 @@ int main(int argc, char **argv)
         tokenize(tok_argc, tok_argv, preproced, size, &dst, &dst_size, &dict, &dict_size);
 
         t2 = now_ms();
-        parse(dst, dict, dict_size, &app);
+        parse(dst, dict, dict_size, &app, &dom_asset);
 
         t3 = now_ms();
 

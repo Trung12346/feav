@@ -39,15 +39,15 @@ static void frame_buffer_size_callback(GLFWwindow *window, int width, int height
     App *app = glfwGetWindowUserPointer(window);
     app->vk_process.window_resized_event = true;
 }
-static void window_init(GLFWwindow **window, App *app)
+static void window_init(App *app)
 {
     glfwInit();
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
     glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE);
 
-    *window = glfwCreateWindow(VIEW_PORT_WIDTH, VIEW_PORT_HEIGHT, "Vulkan", NULL, NULL);
-    glfwSetWindowUserPointer(*window, app);
-    glfwSetFramebufferSizeCallback(*window, &frame_buffer_size_callback);
+    app->window = glfwCreateWindow(VIEW_PORT_WIDTH, VIEW_PORT_HEIGHT, "Vulkan", NULL, NULL);
+    glfwSetWindowUserPointer(app->window, app);
+    glfwSetFramebufferSizeCallback(app->window, &frame_buffer_size_callback);
 }
 static void vulkan_init(App *app)
 {
@@ -137,7 +137,7 @@ static void clean_up(App *app)
 void run(App *app)
 {
     resource_init(&app->caches);
-    window_init(&app->window, app);
+    window_init(app);
     dobj_init(app);
     vulkan_init(app);
     main_loop(app);

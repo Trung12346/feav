@@ -7,13 +7,42 @@
 #include "interpreter/tokenizer.h"
 #include "debugger.h"
 #include "ryu/ryu_parse.h"
+#include <windows.h>
 
 #define BUILD_DOM_OP_MODE_MASK 0b11110000
 #define HEAP_CSS_ATTRIBUTE_STRIDE 2
 #define HEAP_CSS_VALUE_STRIDE 4
-#define VALUE_BUFFER_SIZE 1024 * 2
+#define VALUE_BUFFER_SIZE (1024 * 2)
 
-bool is_separator(char c) {
+#define DOBJHANDLER_UNWRAP(o) p = o.pool; id = o.item_index;
+
+#define WRESERVE_ALIGNMENT (64 * 1024)
+#define WRESERVE(POINTER, SIZE) POINTER = VirtualAlloc(NULL, SIZE, MEM_RESERVE, PAGE_NOACCESS);
+#define WCOMMIT(POINTER, OFFSET, SIZE) \
+{ \
+    void *buffer; \
+    uint8_t i = 0; \
+    do \
+    { \
+        buffer = VirtualAlloc((char *)POINTER + OFFSET, SIZE, MEM_COMMIT, PAGE_READWRITE); \
+    } while (buffer == NULL && i++ < 5); \
+    if (!buffer) {printf(ERR SYS_DBG_PREFIX" Failure to commit new memory"); exit(1);} \
+}
+
+#define SIBLING_ARRAY_WMEM_GUARD(POINTER, CUR_SIZE, SIZE) \
+{ \
+    if (CUR_SIZE >= SIZE) \
+    { \
+        WCOMMIT(POINTER, SIZE, POOL_ELEMENT_COUNT * 8) \
+        SIZE += POOL_ELEMENT_COUNT * 8; \
+    } \
+}
+
+#define UP_64_48_MASK_POINTER 0x0000FFFFFFFFFFFFULL
+#define UP_64_48_MASK_TAG     0xFFFF000000000000ULL
+
+bool is_separator(char c)
+{
     return (c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == '\0');
 }
 
@@ -26,9 +55,17 @@ typedef enum {
     CSS_AFTER_VALUE
 } CSS_PARSER_STATE;
 
+typedef union {
+    uint32_t u32;
+    float f32;
+} uf_32;
 
+typedef union {
+    uint64_t u64;
+    void *p48;
+} up_64_48;
 
-HeapHandler16 css_parse(const char *css, size_t size, App *app)
+HeapHandler16 css_parse(const char *css, size_t size, App *app, DOBJHandler cur_o)
 {
     //css table laid out flat in memory, which this function will save into Heap and spit out HeapHandler16 
     /*
@@ -51,9 +88,12 @@ CSS identifier  float32 value
     uint8_t *buffer = malloc(buffer_alloc_size); 
 
     uint16_t css_id;
-    uint32_t value;
+    uf_32 value;
 
     bool pass;
+
+    DOBJPool *pl = cur_o.pool;
+    poid i = cur_o.item_index;
 
     for (; p < cap; p++)
     {
@@ -123,20 +163,31 @@ CSS identifier  float32 value
                         switch (len)
                         {
                             case 7: //+1 accounting for the hex designator #
-                                value = h_2_srgb(p_strt + 1);
+                                value.u32 = h_2_srgb(p_strt + 1);
                                 break;
                             case 9:
-                                value = h_2_srgba(p_strt + 1);
+                                value.u32 = h_2_srgba(p_strt + 1);
                                 break;
                             default:
                                 //handle exception
                         }
-                    } //handle more special value
+                    } else if (css_id == cache->CSS_WIDTH)
+                    {
+                        s2f_n(p_strt, len, pl->width + i);
+                        //pl->prty_flags[i] &= ~(DOBJ_PROPERTY_UNIT_MASK_WIDTH);
+                        pl->prty_flags[i] |= DOBJ_PROPERTY_UNIT_PIXEL_GROUP_WIDTH_BIT;
+                    } else if (css_id == cache->CSS_HEIGHT)
+                    {
+                        s2f_n(p_strt, len, pl->height + i);
+                        //pl->prty_flags[i] &= ~(DOBJ_PROPERTY_UNIT_MASK_HEIGHT);
+                        pl->prty_flags[i] |= DOBJ_PROPERTY_UNIT_PIXEL_GROUP_HEIGHT_BIT;
+                    }
+                     //handle more special value
                     else
                     {
-                        float f;
-                        s2f_n(p_strt, len, &f);
-                        memcpy(&value, &f, HEAP_CSS_VALUE_STRIDE);
+                        //float f;
+                        s2f_n(p_strt, len, &value.f32);
+                        //memcpy(&value, &f, HEAP_CSS_VALUE_STRIDE);
                     }
                     memcpy(buffer + buffer_size, &value, HEAP_CSS_VALUE_STRIDE);
                     buffer_size += HEAP_CSS_VALUE_STRIDE;
@@ -275,6 +326,16 @@ void parse(char *src, uint8_t *dict, uint64_t dict_size, App* app, BHeap **h)
     bool value_transit = false;
 
     DOBJHandler o = (DOBJHandler){.pool = NULL};
+    DOBJHandler cur_o;
+
+    DOBJPool *p;
+    poid id;
+
+    up_64_48 *last_child;
+    size_t lc_alloc_size = POOL_ELEMENT_COUNT * 8;
+    WRESERVE(last_child, WRESERVE_ALIGNMENT)
+    WCOMMIT(last_child, 0, lc_alloc_size)
+    uint64_t parent_offset;
 
     // uint16_t attr_alloc_size = 128;
     // uint16_t attr_count = 0;
@@ -320,21 +381,21 @@ void parse(char *src, uint8_t *dict, uint64_t dict_size, App* app, BHeap **h)
 
             if (token == START_TAG)
             {
-                for (uint64_t i = 0; i < value_size; i++)
+                for (uint64_t j = 0; j < value_size; j++)
                 {
                     switch (state)
                     {
                         case BEFORE_TAG:
-                            if (!is_separator(value[i]))
+                            if (!is_separator(value[j]))
                             {
-                                strt_value_ind = i;
+                                strt_value_ind = j;
                                 state = IN_TAG;
                             }
                             break;
                         case IN_TAG:
-                            if (is_separator(value[i]))
+                            if (is_separator(value[j]))
                             {
-                                end_value_ind = i;
+                                end_value_ind = j;
                                 state = BEFORE_ATTR_NAME;
 
                                 tag_size = end_value_ind - strt_value_ind;
@@ -349,20 +410,43 @@ void parse(char *src, uint8_t *dict, uint64_t dict_size, App* app, BHeap **h)
                                     .ref_pool = pool,
                                     .h_parent = o
                                 };
-                                o = dobj_create(&create_info);
-                                if (bm_bit_fetch(app->caches.hsctbm, o.pool->tag_ids[o.item_index])) o = dobj_get_h_parent(o);
-                                DOBJPool *p = o.pool;
-                                poid i = o.item_index;
-                                if (o.pool->tag_ids[o.item_index] == app->caches.ha->HTML_HTML)
+                                o = cur_o = dobj_create(&create_info);
+                                DOBJHANDLER_UNWRAP(o);
+
+                                
+
+                                if (p->tag_ids[id] == app->caches.ha->HTML_HTML)
                                 {
                                     int w;
                                     int h;
                                     glfwGetWindowSize(app->window, &w, &h);
-                                    p->width[i] = (float)w;
-                                    p->height[i] = (float)h;
-                                } else {
-                                    p->DOBJHandler_pool_parent[i]->child_count[p->DOBJHandler_item_index_parent[i]]++;
+                                    p->width[id] = (float)w;
+                                    p->height[id] = (float)h;
+                                    p->x[id] = 0.f;
+                                    p->y[id] = 0.f;
+                                } else
+                                {
+                                    parent_offset = dobj_get_glbid_parent(o);
+
+                                    if (p->DOBJHandler_pool_parent[id]->child_count[p->DOBJHandler_item_index_parent[id]]++ != 0)
+                                    {
+                                        DOBJPool *pp = (void *)((*(last_child + parent_offset)).u64 & UP_64_48_MASK_POINTER);
+                                        poid pid = (*(last_child + parent_offset)).u64 >> 48;
+                                        //asign previous sibling to this one
+                                        p->DOBJHandler_pool_prev_sib[id] = pp;
+                                        p->DOBJHandler_item_index_prev_sib[id] = pid;
+
+                                        //asign this one to previous sibling 
+                                        pp->DOBJHandler_pool_next_sib[pid] = p;
+                                        pp->DOBJHandler_item_index_next_sib[pid] = id; 
+                                    }
+                                    
+                                    
+                                    SIBLING_ARRAY_WMEM_GUARD(last_child, parent_offset * 8, lc_alloc_size)
+                                    (*(last_child + parent_offset)).p48 = p;
+                                    (*(last_child + parent_offset)).u64 |= (uint64_t)id << 48;
                                 }
+                                if (bm_bit_fetch(app->caches.hsctbm, o.pool->tag_ids[o.item_index])) o = dobj_get_h_parent(o);
                                 //else p = o;
                                 /*
                                 o = NULL; p = NULL
@@ -374,16 +458,16 @@ void parse(char *src, uint8_t *dict, uint64_t dict_size, App* app, BHeap **h)
                             }
                             break;
                         case BEFORE_ATTR_NAME:
-                            if (!is_separator(value[i]))
+                            if (!is_separator(value[j]))
                             {
-                                strt_value_ind = i;
+                                strt_value_ind = j;
                                 state = IN_ATTR_NAME;
                             }
                             break;
                         case IN_ATTR_NAME:
-                            if (value[i] == '=') //transitioning from reading attribute name to attribute value
+                            if (value[j] == '=') //transitioning from reading attribute name to attribute value
                             {
-                                end_value_ind = i;
+                                end_value_ind = j;
                                 state = BEFORE_ATTR_VALUE;
 
                                 attr_name_size = end_value_ind - strt_value_ind;
@@ -392,9 +476,9 @@ void parse(char *src, uint8_t *dict, uint64_t dict_size, App* app, BHeap **h)
 
                                 // printf("attribute name: %s\n", attribute);
                                 attribute = value + strt_value_ind;
-                            } else if (is_separator(value[i])) //register attribute with unset value
+                            } else if (is_separator(value[j])) //register attribute with unset value
                             {
-                                end_value_ind = i;
+                                end_value_ind = j;
                                 state = AFTER_ATTR_NAME;
 
                                 attr_name_size = end_value_ind - strt_value_ind;
@@ -404,13 +488,13 @@ void parse(char *src, uint8_t *dict, uint64_t dict_size, App* app, BHeap **h)
                             }
                             break;
                         case AFTER_ATTR_NAME:
-                            if (value[i] == '=')
+                            if (value[j] == '=')
                             {
                                 state = BEFORE_ATTR_VALUE;
-                            } else if (!is_separator(value[i]))
+                            } else if (!is_separator(value[j]))
                             {
                                 state = IN_ATTR_NAME;
-                                strt_value_ind = i;
+                                strt_value_ind = j;
                                 //process attribute whose value is not set
                                 if (strncmp(attribute, "hidden", attr_name_size) == 0)
                                 {
@@ -431,36 +515,37 @@ void parse(char *src, uint8_t *dict, uint64_t dict_size, App* app, BHeap **h)
                             }
                             break;
                         case BEFORE_ATTR_VALUE:
-                            if (value[i] == '\'' || value[i] == '"')
+                            if (value[j] == '\'' || value[j] == '"')
                             {
                                 enclosed_value = true;
-                                strt_value_ind = i + 1;
+                                strt_value_ind = j + 1;
                                 state = IN_ATTR_VALUE;
-                            } else if (!is_separator(value[i]))
+                            } else if (!is_separator(value[j]))
                             {
-                                strt_value_ind = i;
+                                strt_value_ind = j;
                                 state = IN_ATTR_VALUE;
                             }
                             break;
                         case IN_ATTR_VALUE:
-                            if (value[i] == '\'' || value[i] == '"' || (is_separator(value[i]) && !enclosed_value))
+                            if (value[j] == '\'' || value[j] == '"' || (is_separator(value[j]) && !enclosed_value))
                             {
-                                end_value_ind = i;
+                                end_value_ind = j;
                                 enclosed_value = false;
                                 state = BEFORE_ATTR_NAME;
 
                                 attr_value_size = end_value_ind - strt_value_ind;
+                                attr_value = value + strt_value_ind;
                                 // memcpy(attr_value, value + strt_value_ind, attr_value_size);
                                 // attr_value[attr_value_size++] = '\0';
                                 // printf("attribute value: %s\n", attr_value);
 
                                 //process attribute with value
                                 // printf("ATTR NAME: %s\n", attribute);
-                                if (strncmp(attribute, "style", attr_value_size) == 0)
+                                if (strncmp(attribute, "style", attr_name_size) == 0)
                                 {
                                     // memcpy(build_info.style, attr_value, attr_value_size);
                                     // build_info.style_size = attr_value_size;
-                                    dobj_style_insert(o, css_parse(attr_value, attr_value_size, app));
+                                    dobj_style_insert(o, css_parse(attr_value, attr_value_size, app, cur_o));
                                 }
                             }
                             break;
@@ -488,6 +573,7 @@ void parse(char *src, uint8_t *dict, uint64_t dict_size, App* app, BHeap **h)
 
     // free(attrs);
     // free(attr_values);
+    VirtualFree(last_child, 0, MEM_RELEASE);
     free(src);
     free(dict);
 }

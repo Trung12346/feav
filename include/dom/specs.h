@@ -729,10 +729,16 @@ typedef struct DOBJPool {
 
     //DOBJHandler parent[POOL_ELEMENT_COUNT];
     struct DOBJPool *DOBJHandler_pool_parent[POOL_ELEMENT_COUNT];
+    struct DOBJPool *DOBJHandler_pool_next_sib[POOL_ELEMENT_COUNT];
+    struct DOBJPool *DOBJHandler_pool_prev_sib[POOL_ELEMENT_COUNT];
     poid DOBJHandler_item_index_parent[POOL_ELEMENT_COUNT];
+    poid DOBJHandler_item_index_next_sib[POOL_ELEMENT_COUNT];
+    poid DOBJHandler_item_index_prev_sib[POOL_ELEMENT_COUNT];
 
     UINTx_T(MAX_CHILD_VAR_WIDTH) child_count[POOL_ELEMENT_COUNT];
     //uint8_t life_span_points[POOL_ELEMENT_COUNT]; original design involved a GC, but no, so now its not needed anymore, everything is explicit
+
+    DOBJpropertyUnitFlag prty_flags[POOL_ELEMENT_COUNT];
 
     CSSattributePosition position[POOL_ELEMENT_COUNT];
     float x[POOL_ELEMENT_COUNT];
@@ -763,6 +769,12 @@ static inline DOBJHandler dobj_get_h_parent(DOBJHandler h)
     DOBJPool *p = h.pool;
     poid i = h.item_index;
     return (DOBJHandler){.pool = p->DOBJHandler_pool_parent[i], .item_index = p->DOBJHandler_item_index_parent[i]};
+}
+static inline uint64_t dobj_get_glbid_parent(DOBJHandler h)
+{
+    DOBJPool *p = h.pool;
+    poid i = h.item_index;
+    return p->DOBJHandler_item_index_parent[i] + p->DOBJHandler_pool_parent[i]->pool_index * POOL_ELEMENT_COUNT;
 }
 
 static inline LayoutBoxProperties padding(float t, float r, float b, float l)

@@ -36,6 +36,20 @@ void print_array(const uint8_t *array, size_t count)
     printf("\n");
 }
 
+void print_dobj(DOBJHandler strt, size_t cnt)
+{
+    for (size_t i = 0; i < cnt; i++)
+    {
+        DOBJPool *p = strt.pool;
+        poid id = strt.item_index;
+        printf("OBJ #%llu:\n{\n", i);
+        printf(TAB "x: %.f, y: %.f\n", p->x[id], p->y[id]);
+        printf(TAB "width: %.f, height: %.f\n", p->width[id], p->height[id]);
+        printf("}\n");
+        dobj_pool_advance(&strt);
+    }
+}
+
 static void dobj_printn(DOBJHandler start, uint64_t n) {
     for (uint64_t i = 0U; i < n; i++)
     {
@@ -107,8 +121,7 @@ int main(int argc, char **argv)
         double t1;
         double t2;
         double t3;
-        double t4;
-        
+    
         //window_init(&app);
         resource_init(&app.caches);
         dobj_init(&app);
@@ -134,6 +147,10 @@ int main(int argc, char **argv)
         parse(dst, dict, dict_size, &app, &dom_asset);
 
         t3 = now_ms();
+
+        fb_compute((DOBJHandler){.pool = app.pool, .item_index = 0});
+
+
 
         // dobj_init(&app);
         // HeapHandler64 hh = heap_alloc(app.heap, 8, HEAP_CLASS_HEAP, &app.hflo_queue);
@@ -189,6 +206,7 @@ int main(int argc, char **argv)
         printf("preprocessing %.3f\n", t1 - t0);
         printf("tokenizing %.3f\n", t2 - t1);
         printf("parsing %.3f\n", t3 - t2);
+        print_dobj((DOBJHandler){.pool = app.pool, .item_index = 0}, 7);
 
     }
     terminate(&app.hflo_queue.worker);

@@ -245,6 +245,8 @@ DOBJHandler dobj_pool_alloc(DOBJ *obj, DOBJPool *pool)
     working_pool->padding[working_index] = obj->padding;
     working_pool->margin[working_index] = obj->margin;
 
+    working_pool->prty_flags[working_index] = 0UL;
+
     // return working_pool->pool_index * POOL_ELEMENT_COUNT + working_index;
     return (DOBJHandler){.pool = working_pool, .item_index = working_index};
 }

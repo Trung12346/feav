@@ -6,7 +6,7 @@
 #include <stdint.h>
 #include "debugger.h"
 
-#define UINTx_T_(w) uint##w##_t 
+#define UINTx_T_(w) uint##w##_t
 #define UINTx_T(w) UINTx_T_(w)
 
 #define ARR_SIZE(p_size, return_size, p_arr) \

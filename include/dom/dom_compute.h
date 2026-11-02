@@ -1,7 +1,7 @@
 #ifndef DOM_COMPUTE_H
 #define DOM_COMPUTE_H
 
-// #include "dom/specs.h"
+#include "dom/specs.h"
 // #include "dom/dom_entity.h"
 // #include "app.h"
 // #include "math.h"
@@ -103,6 +103,31 @@
 //     }
 // }
 
+void fb_compute(DOBJHandler h)
+{
 
+    UINTx_T(MAX_CHILD_VAR_WIDTH) child_count = h.pool->child_count[h.item_index];
+    DOBJHandler parnt = h;
+    dobj_pool_advance(&h);
+
+    float cursor_x = parnt.pool->x[parnt.item_index];
+    float cursor_y = parnt.pool->y[parnt.item_index];
+    for (uint64_t l = 0; l < child_count; l++)
+    {
+        DOBJPool *p = h.pool;
+        poid i = h.item_index;
+
+        if
+        (
+            p->DOBJHandler_pool_parent[i] == parnt.pool &&
+            p->DOBJHandler_item_index_parent[i] == parnt.item_index
+        )
+        {
+            p->x[i] = cursor_x;
+            cursor_x += p->width[i];
+        } else l--;
+        dobj_pool_advance(&h);
+    }
+}
 
 #endif

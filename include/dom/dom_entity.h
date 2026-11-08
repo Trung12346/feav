@@ -312,6 +312,20 @@ void static inline dobj_pool_retard(DOBJHandler *handler)
     handler->item_index--;
 }
 
+void static inline dobj_pool_next_sib(DOBJHandler *handler)
+{
+    poid i = handler->item_index;
+    handler->item_index = handler->pool->DOBJHandler_item_index_next_sib[i];
+    handler->pool = handler->pool->DOBJHandler_pool_next_sib[i]; 
+}
+
+void static inline dobj_pool_prev_sib(DOBJHandler *handler)
+{
+    poid i = handler->item_index;
+    handler->item_index = handler->pool->DOBJHandler_item_index_prev_sib[i];
+    handler->pool = handler->pool->DOBJHandler_pool_prev_sib[i]; 
+}
+
 #define HEAP_INIT(heap, prev_heap, handler_size) \
 { \
     heap->live_objects = 0; \

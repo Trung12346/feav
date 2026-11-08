@@ -432,6 +432,7 @@ void parse(char *src, uint8_t *dict, uint64_t dict_size, App* app, BHeap **h)
                                     {
                                         DOBJPool *pp = (void *)((*(last_child + parent_offset)).u64 & UP_64_48_MASK_POINTER);
                                         poid pid = (*(last_child + parent_offset)).u64 >> 48;
+                                        
                                         //asign previous sibling to this one
                                         p->DOBJHandler_pool_prev_sib[id] = pp;
                                         p->DOBJHandler_item_index_prev_sib[id] = pid;

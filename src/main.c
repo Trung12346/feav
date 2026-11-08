@@ -15,6 +15,7 @@
 #include "dom/dom_compute.h"
 #include "hardware_utils/hash.h"
 #include <stdatomic.h>
+#include "layout_engine/specs.h"
 
 #ifndef ARG_VAL
 #define ARG_VAL char*value=argv[i+1];if(strncmp(value,"--", 2) == 0){printf(ERR SYS_DBG_PREFIX" Invalid argument for %s",argv[i]);exit(1);}
@@ -35,6 +36,8 @@ void print_array(const uint8_t *array, size_t count)
 
     printf("\n");
 }
+
+
 
 void print_dobj(DOBJHandler strt, size_t cnt)
 {
@@ -122,9 +125,10 @@ int main(int argc, char **argv)
         double t2;
         double t3;
     
-        //window_init(&app);
+        window_init(&app);
         resource_init(&app.caches);
         dobj_init(&app);
+
 
         BHeap *dom_asset;
 
@@ -148,7 +152,7 @@ int main(int argc, char **argv)
 
         t3 = now_ms();
 
-        fb_compute((DOBJHandler){.pool = app.pool, .item_index = 0});
+        //fb_compute((DOBJHandler){.pool = app.pool, .item_index = 0});
 
 
 
@@ -203,10 +207,22 @@ int main(int argc, char **argv)
         
         // dobj_printn((DOBJHandler){.pool = pool, .item_index = 0}, 4);
 
+
+
         printf("preprocessing %.3f\n", t1 - t0);
         printf("tokenizing %.3f\n", t2 - t1);
         printf("parsing %.3f\n", t3 - t2);
-        print_dobj((DOBJHandler){.pool = app.pool, .item_index = 0}, 7);
+        //print_dobj((DOBJHandler){.pool = app.pool, .item_index = 0}, 7);
+        // feav_layout_dump(app.pool);
+
+        // printf("C side: pool pointer = %p, child_count[0] = %u\n",
+        // (void *)app.pool, (unsigned)app.pool->child_count[0]);
+        // uint64_t descendantCount = feav_layout_count_descendants(app.pool, 0);
+        // printf("taffy sees %llu descendants of node 0\n", (unsigned long long)descendantCount);
+
+        // feav_layout_print_node_sizes(app.pool, 0);
+        feav_layout_compute(app.pool, 0);
+        feav_layout_dump(app.pool);
 
     }
     terminate(&app.hflo_queue.worker);

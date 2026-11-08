@@ -7,14 +7,14 @@ src\main.c ^
 dependencies\ryu\ryu\s2f.c ^
 dependencies\ryu\ryu\s2d.c ^
 -I include ^
--I C:\VulkanSDK\1.4.357.0\Include ^
+-I %VULKAN_SDK%\Include ^
 -I dependencies\cglm\include ^
 -I dependencies\glfw\include ^
 -I dependencies\ryu ^
 -L dependencies\cglm\build ^
 -L dependencies\glfw\build\src ^
 -L include\layout_engine\target\x86_64-pc-windows-gnu\release ^
--L C:\VulkanSDK\1.4.357.0\Lib ^
+-L %VULKAN_SDK%\Lib ^
 -l glfw3 ^
 -l cglm.dll ^
 -l gdi32 ^

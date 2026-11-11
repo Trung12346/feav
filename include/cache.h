@@ -10,9 +10,15 @@ typedef struct {
     CSSattribute *ca; //"runtime-enum", enum configuration is dependent on hashing algorithm
     HTMLtag *ha; //this was meant to be named ht but guess i will refactor it later
     uint64_t hsctbm[HTML_TAG_HMAP_SLOT_COUNT / QWORD_WIDTH]; //html self-close tags bitmap
+    ComputedElement *results;
+    uint64_t element_count;
+    size_t result_committed_size;
 } AppCaches;
 
-
+void cpr_init(AppCaches *cache)
+{
+    WRESERVE(cache->results, WRESERVE_ALIGNMENT * 10) //10 is a random number,
+}
 
 void hsctbm_init(AppCaches *cache)
 {
@@ -122,6 +128,8 @@ void resource_init(AppCaches *cache)
 
 
     hsctbm_init(cache);
+
+    cpr_init(cache);
 }
 
 #endif

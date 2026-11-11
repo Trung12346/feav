@@ -10,6 +10,7 @@
 #include <stdatomic.h>
 #include "dom/specs.h"
 #include "hardware_utils/hash.h"
+#include "cache.h"
 
 // uint8_t tag_name_resolver(const char *name)
 // {
@@ -112,7 +113,7 @@
 //     return 0;
 // }
 
-void pool_init(DOBJPool **pool, DOBJPool *prev_pool) //latest pool must be passed in
+void pool_init(DOBJPool **pool, DOBJPool *prev_pool, AppCaches *cache) //latest pool must be passed in
 {
     *pool = calloc(1, sizeof(DOBJPool));
 
@@ -129,6 +130,10 @@ void pool_init(DOBJPool **pool, DOBJPool *prev_pool) //latest pool must be passe
         (*pool)->pool_index = 0;
     }
     (*pool)->p_next = NULL;
+
+    size_t new_commit_size = sizeof(ComputedElement) * POOL_ELEMENT_COUNT;
+    WCOMMIT(cache->results, cache->result_committed_size, new_commit_size)
+    cache->result_committed_size = cache->result_committed_size + new_commit_size;
 }
 
 DOBJHandler pool_search(DOBJPool *pool, uint64_t pool_glb_index)
@@ -207,7 +212,7 @@ uint16_t available_pool_region_search(DOBJPool *pool, bool *free_found)
     }
     return 0;
 }
-DOBJHandler dobj_pool_alloc(DOBJ *obj, DOBJPool *pool)
+DOBJHandler dobj_pool_alloc(DOBJ *obj, DOBJPool *pool, AppCaches *cache)
 {
     bool free_found = false;
     DOBJPool *working_pool = pool;
@@ -215,11 +220,11 @@ DOBJHandler dobj_pool_alloc(DOBJ *obj, DOBJPool *pool)
 
     if (!free_found && pool->p_next == NULL)
     {
-        pool_init(&working_pool, pool);
+        pool_init(&working_pool, pool, cache);
         working_index = 0;
     } else if (!free_found && pool->p_next != NULL)
     {
-        return dobj_pool_alloc(obj, pool->p_next);
+        return dobj_pool_alloc(obj, pool->p_next, cache);
     }
     working_pool->live_objects++;
     working_pool->status_flags[working_index] |= POOL_STATUS_IS_OCCUPIED_BIT;
@@ -237,8 +242,8 @@ DOBJHandler dobj_pool_alloc(DOBJ *obj, DOBJPool *pool)
     working_pool->child_count[working_index] = obj->child_count;
 
     working_pool->position[working_index] = obj->position;
-    working_pool->x[working_index] = obj->x;
-    working_pool->y[working_index] = obj->y;
+    // working_pool->x[working_index] = obj->x;
+    // working_pool->y[working_index] = obj->y;
     working_pool->width[working_index] = obj->width;
     working_pool->height[working_index] = obj->height;
 

@@ -29,6 +29,19 @@ typedef enum
     true
 } bool;
 
+typedef union {
+    uint32_t u32;
+    float f32;
+} uf_32;
+
+#define UP_64_48_MASK_POINTER 0x0000FFFFFFFFFFFFULL
+#define UP_64_48_MASK_TAG     0xFFFF000000000000ULL
+
+typedef union {
+    uint64_t u64;
+    void *p48;
+} up_64_48;
+
 uint32_t unsigned_type_width_resolver(uint64_t type)
 {
     switch (type)
@@ -113,27 +126,35 @@ uint32_t h_2_srgb(const char *hex)
 {
     return (uint32_t)
     (
-        ascii_map[hex[0]] << 20
-        | ascii_map[hex[1]] << 16
-        | ascii_map[hex[2]] << 12
-        | ascii_map[hex[3]] << 8
-        | ascii_map[hex[4]] << 4
-        | ascii_map[hex[5]]
+        0xFFUL << 24 |
+        ascii_map[hex[0]] << 20 |
+        ascii_map[hex[1]] << 16 |
+        ascii_map[hex[2]] << 12 |
+        ascii_map[hex[3]] << 8 |
+        ascii_map[hex[4]] << 4 |
+        ascii_map[hex[5]]
     );
 }
 uint32_t h_2_srgba(const char *hex)
 {
     return (uint32_t)
     (
-        ascii_map[hex[0]] << 28
-        | ascii_map[hex[1]] << 24
-        | ascii_map[hex[2]] << 20
-        | ascii_map[hex[3]] << 16
-        | ascii_map[hex[4]] << 12
-        | ascii_map[hex[5]] << 8
-        | ascii_map[hex[6]] << 4
-        | ascii_map[hex[7]]
-    );
+        ascii_map[hex[0]] << 20 |
+        ascii_map[hex[1]] << 16 |
+        ascii_map[hex[2]] << 12 |
+        ascii_map[hex[3]] << 8 |
+        ascii_map[hex[4]] << 4 |
+        ascii_map[hex[5]] |
+        ascii_map[hex[6]] << 28 | // alpha stored in the most significant byte so one consumer can accept 
+        ascii_map[hex[7]] << 24   //output from both rgb and rgba, tbh what kind of idiot put a in this format RRGGBBAA
+    );                            //you get what i mean right?
+}
+void srgba_2_vec4(uint32_t background_color, uf_32 *vec4)
+{
+    (vec4++)->f32 = ((background_color & 0x00FF0000UL) >> 16) / 255.0f;
+    (vec4++)->f32 = ((background_color & 0x0000FF00UL) >> 8) / 255.0f;
+    (vec4++)->f32 = (background_color & 0x000000FFUL) / 255.0f;
+    vec4->f32 = ((background_color & 0xFF000000UL) >> 24) / 255.0f;
 }
 
 static inline void bm_bit_set(uint64_t *bm, uint64_t i)
@@ -142,10 +163,24 @@ static inline void bm_bit_set(uint64_t *bm, uint64_t i)
 }
 static inline void bm_bit_clear(uint64_t *bm, uint64_t i)
 {
-    bm[i >> 6U] &= ~((uint64_t)1ULL << (i & 64U));
+    bm[i >> 6U] &= ~((uint64_t)1ULL << (i & 63U));
 }
 static inline bool bm_bit_fetch(uint64_t *bm, uint64_t i)
 {
     return bm[i >> 6U] & (uint64_t)1ULL << (i & 63U);
+}
+
+#define WRESERVE_ALIGNMENT (64ULL * 1024ULL)
+#define WCOMMIT_ALIGNMENT (4ULL * 1024ULL)
+#define WRESERVE(POINTER, SIZE) POINTER = VirtualAlloc(NULL, SIZE, MEM_RESERVE, PAGE_NOACCESS);
+#define WCOMMIT(POINTER, OFFSET, SIZE) \
+{ \
+    void *buffer; \
+    uint8_t i = 0; \
+    do \
+    { \
+        buffer = VirtualAlloc((char *)POINTER + OFFSET, SIZE, MEM_COMMIT, PAGE_READWRITE); \
+    } while (buffer == NULL && i++ < 5); \
+    if (!buffer) {printf(ERR SYS_DBG_PREFIX" Failure to commit new memory"); exit(1);} \
 }
 #endif

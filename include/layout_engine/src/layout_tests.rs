@@ -6,7 +6,8 @@ use core::ffi::c_void;
 use std::alloc::{alloc_zeroed, dealloc, Layout};
 
 use crate::display::LayoutDisplay;
-use crate::pool_layout::feav_layout_compute;
+use crate::pool_layout::compute_layout;
+use crate::{ComputedElement, POOL_ELEMENT_COUNT};
 use crate::text_measure::{feav_layout_set_text_measure, LayoutAvailableSpaceMode, LayoutTextMeasureResult};
 use crate::{
     DOBJPool, LayoutBox, Unit, UNIT_OFFSET_BORDER_BOTTOM, UNIT_OFFSET_BORDER_LEFT, UNIT_OFFSET_BORDER_RIGHT,
@@ -23,9 +24,12 @@ const ALL_PADDING_UNIT_OFFSETS: [u32; 4] =
 const ALL_BORDER_UNIT_OFFSETS: [u32; 4] =
     [UNIT_OFFSET_BORDER_TOP, UNIT_OFFSET_BORDER_BOTTOM, UNIT_OFFSET_BORDER_LEFT, UNIT_OFFSET_BORDER_RIGHT];
 
-/// Owns one zeroed pool for the duration of a test.
+/// Owns one zeroed pool and its results array for the duration of a test.
 struct TestPool {
     p_pool: *mut DOBJPool,
+    /// `results[global id]`, like `AppCaches.results` in C. A `Vec` is a growable array; because
+    /// `ComputedElement` is 8-byte aligned, its memory is 8-byte aligned too.
+    results: Vec<ComputedElement>,
 }
 
 // `Drop` is a trait whose `drop` function runs automatically when the value goes out of
@@ -37,13 +41,25 @@ impl Drop for TestPool {
 }
 
 impl TestPool {
-    /// A pool whose root (slot 0) has the window size 800 x 600 in its width/height values.
+    /// A pool with room for one pool of results, whose root (slot 0) has the window size 800 x 600
+    /// stored in `results[0]`, where the parser stores it.
     fn new() -> TestPool {
+        TestPool::with_pool_count(1)
+    }
+
+    /// Same, with room in the results array for `pool_count` pools.
+    // `vec![value; n]` builds a Vec holding n copies of value.
+    fn with_pool_count(pool_count: usize) -> TestPool {
         let p_pool = unsafe { alloc_zeroed(Layout::new::<DOBJPool>()) } as *mut DOBJPool;
-        let mut test_pool = TestPool { p_pool };
-        test_pool.pool().width[0] = 800.0;
-        test_pool.pool().height[0] = 600.0;
+        let mut test_pool =
+            TestPool { p_pool, results: vec![ComputedElement::default(); POOL_ELEMENT_COUNT * pool_count] };
+        test_pool.set_window(800.0, 600.0);
         test_pool
+    }
+
+    fn set_window(&mut self, width: f32, height: f32) {
+        self.results[0].width = width;
+        self.results[0].height = height;
     }
 
     fn pool(&mut self) -> &mut DOBJPool {
@@ -98,13 +114,13 @@ impl TestPool {
     }
 
     fn compute(&mut self) {
-        unsafe { feav_layout_compute(self.p_pool, 0) };
+        unsafe { compute_layout(self.p_pool, self.results.as_mut_ptr(), self.results.len() as u64, 0) };
     }
 
-    /// (x, y, width, height) of one node after layout.
-    fn rectangle(&mut self, item: usize) -> (f32, f32, f32, f32) {
-        let pool = self.pool();
-        (pool.x[item], pool.y[item], pool.computed_width[item], pool.computed_height[item])
+    /// (x, y, width, height) of one node after layout, by global id.
+    fn rectangle(&self, global_id: usize) -> (f32, f32, f32, f32) {
+        let result = &self.results[global_id];
+        (result.x, result.y, result.width, result.height)
     }
 }
 
@@ -333,6 +349,72 @@ fn display_code_lives_beside_the_units_without_disturbing_them() {
     assert_eq!(t.rectangle(1).2, 100.0);
 }
 
+#[test]
+fn layout_writes_only_the_four_geometry_fields_and_keeps_the_colour_channels() {
+    let mut t = TestPool::new();
+    t.set_children(0, &[1]);
+    t.set_height(1, Unit::Pixel, 50.0);
+    t.results[1].color_channels = [11, 22, 33, 44]; // written by the parser in the real app
+    t.results[0].color_channels = [5, 6, 7, 8];
+    t.compute();
+    assert_eq!(t.rectangle(1), (0.0, 0.0, 800.0, 50.0));
+    assert_eq!(t.results[1].color_channels, [11, 22, 33, 44]);
+    assert_eq!(t.results[0].color_channels, [5, 6, 7, 8]);
+}
+
+#[test]
+fn the_root_keeps_the_window_size_it_started_with() {
+    let mut t = TestPool::new();
+    t.set_window(1000.0, 760.0);
+    t.compute();
+    assert_eq!(t.rectangle(0), (0.0, 0.0, 1000.0, 760.0));
+    // a resize: change the root's size, run again
+    t.set_window(500.0, 300.0);
+    t.compute();
+    assert_eq!(t.rectangle(0), (0.0, 0.0, 500.0, 300.0));
+}
+
+#[test]
+fn nodes_in_the_second_pool_use_the_second_block_of_results() {
+    // 0 root (pool 0) -- 1 A (h 50) ; 1023 B (last slot of pool 0) -- 1024 C (slot 0 of pool 1, h 10)
+    let mut t = TestPool::with_pool_count(2);
+    let p0 = t.p_pool;
+    let p1 = unsafe { alloc_zeroed(Layout::new::<DOBJPool>()) } as *mut DOBJPool;
+    unsafe {
+        (*p0).p_next = p1;
+        (*p1).p_prev = p0;
+        (*p1).pool_index = 1;
+    }
+    t.set_children(0, &[1, 1023]);
+    t.pool().child_count[1023] = 1; // C is the next slot: slot 0 of pool 1
+    t.set_height(1, Unit::Pixel, 50.0);
+    unsafe {
+        (*p1).prty_flags[0] = 1 << UNIT_OFFSET_HEIGHT;
+        (*p1).height[0] = 10.0;
+    }
+    t.compute();
+    assert_eq!(t.rectangle(1023), (0.0, 50.0, 800.0, 10.0)); // B wraps C
+    assert_eq!(t.rectangle(1024), (0.0, 50.0, 800.0, 10.0)); // C = results[1024], absolute y 50
+    unsafe { dealloc(p1 as *mut u8, Layout::new::<DOBJPool>()) };
+}
+
+#[test]
+#[should_panic(expected = "no result slot")]
+fn a_node_without_committed_result_memory_fails_loudly() {
+    // C = global id 1024 needs results[1024], but only one pool of results exists (1024 elements)
+    let mut t = TestPool::new();
+    let p0 = t.p_pool;
+    let p1 = unsafe { alloc_zeroed(Layout::new::<DOBJPool>()) } as *mut DOBJPool;
+    unsafe {
+        (*p0).p_next = p1;
+        (*p1).p_prev = p0;
+        (*p1).pool_index = 1;
+    }
+    t.set_children(0, &[1, 1023]); // B = slot 1023, its first child is the next slot: pool 1, slot 0
+    t.pool().child_count[1023] = 1;
+    t.compute();
+}
+
 // ---- text measurement through the registered C-style callback ----
 
 // A fake text: only nodes tagged "p" have text. It is 100 px wide on one line, 20 px tall per
@@ -387,8 +469,7 @@ const PARENT_OF_NODE: [i32; 104] = [
 fn index_html_shaped_document_lays_out_as_block() {
     let mut t = TestPool::new();
     // window 1000 x 760, as in feav's dump
-    t.pool().width[0] = 1000.0;
-    t.pool().height[0] = 760.0;
+    t.set_window(1000.0, 760.0);
     // children of every node, in slot order (= document order)
     for parent in 0..104usize {
         let children: Vec<usize> = (0..104usize).filter(|&node| PARENT_OF_NODE[node] == parent as i32).collect();

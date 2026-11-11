@@ -3,12 +3,24 @@
 
 // layout_engine.h  --  C side of the Taffy layout integration (Rust crate in this folder).
 //
-// Needs in dom/specs.h (all already there in the current version):
+// Needs in dom/specs.h (all there in the current version):
 //   * DOBJpropertyUnitFlag is 64-bit, with per-side units and a DISPLAY slot;
-//   * LayoutBoxProperties border[], float computed_width[], float computed_height[] at the end of DOBJPool.
-// And once at startup, so a struct mismatch fails loudly instead of producing garbage:
+//   * LayoutBoxProperties border[] at the end of the style arrays;
+//   * ComputedElement { x, y, width, height, r, g, b, a } 32 bytes, aligned(8): the layout RESULT of one
+//     element, stored in ONE flat array indexed by GLOBAL id (pool_index * POOL_ELEMENT_COUNT + item_index),
+//     i.e. app->caches.results.
+//
+// Layout writes x, y, width, height of every element into that array and never touches r, g, b, a.
+//
+// Once at startup, so a struct mismatch fails loudly instead of producing garbage:
 //
 //     assert(feav_layout_pool_size() == sizeof(DOBJPool));
+//     assert(feav_layout_computed_element_size() == sizeof(ComputedElement));
+//
+// The window size goes in the ROOT element's slot BEFORE every layout call (also after a resize):
+//
+//     app->caches.results[0].width  = windowWidth;
+//     app->caches.results[0].height = windowHeight;
 //
 // IMPORTANT: every flag constant must be computed with 64-bit arithmetic. `0b001 << 33` is a
 // 32-bit shift and gives 0; write `0b001ULL << 33`. (`UL` is not enough on Windows: there
@@ -46,16 +58,23 @@ typedef int32_t (*PFN_LayoutMeasureText)(void *pUserData, const DOBJPool *pPool,
 
 // ---- exported by the Rust library ----
 
-// Lays out every node under rootGlobalId. The window size is read from the root node's own
-// width[] / height[] values. Writes x[], y[] (window coordinates), computed_width[], computed_height[].
-// Style arrays are never modified, so it can be called again after a resize or a style change.
-extern void feav_layout_compute(DOBJPool *pPool, uint64_t rootGlobalId);
+// Lays out every node under rootGlobalId.
+//   pResults        = the flat ComputedElement array (app->caches.results), indexed by global id.
+//   resultCapacity  = how many ComputedElements of it are committed:
+//                     app->caches.result_committed_size / sizeof(ComputedElement).
+// The window size is read from pResults[rootGlobalId].width / .height. Writes x, y (window
+// coordinates), width, height into pResults[global id] for every node under the root. Style arrays are
+// never modified, so it can be called again after a resize or a style change. Stops the program with a
+// message if pResults is NULL, misaligned, or too small for a node (instead of corrupting memory).
+extern void feav_layout_compute(DOBJPool *pPool, ComputedElement *pResults, uint64_t resultCapacity, uint64_t rootGlobalId);
 
 // Registers the text measure callback (NULL unregisters: every leaf then measures 0 x 0).
 extern void feav_layout_set_text_measure(PFN_LayoutMeasureText pfnMeasureText, void *pUserData);
 
 size_t feav_layout_pool_size(void);
-extern void   feav_layout_dump(const DOBJPool *pPool);
+size_t feav_layout_computed_element_size(void);
+// Debug: prints every occupied node with its style (from the pool) and layout (from pResults).
+extern void feav_layout_dump(const DOBJPool *pPool, const ComputedElement *pResults);
 
 // ---- optional helper: monospace text metrics (replace with real font metrics later) ----
 // Greedy word wrap of pText (words split by spaces, '\n' forces a line break).
@@ -118,4 +137,4 @@ static inline void layoutMeasureMonospaceText(const char *pText, uint32_t textLe
     pResult->height = (float)lineCount * lineHeight;
 }
 
-#endif
+#endif

@@ -82,8 +82,6 @@ pub struct DOBJPool {
     pub prty_flags: [UnitFlags; POOL_ELEMENT_COUNT],
 
     pub position: [Position; POOL_ELEMENT_COUNT],
-    pub x: [f32; POOL_ELEMENT_COUNT],
-    pub y: [f32; POOL_ELEMENT_COUNT],
     pub width: [f32; POOL_ELEMENT_COUNT],
     pub height: [f32; POOL_ELEMENT_COUNT],
 
@@ -92,11 +90,8 @@ pub struct DOBJPool {
     pub margin: [LayoutBox; POOL_ELEMENT_COUNT],
     pub border: [LayoutBox; POOL_ELEMENT_COUNT],
 
-    // --- Layout OUTPUT, kept apart from the style INPUT arrays width[] / height[] ---
-    /// OUTPUT. Layout result width. Kept apart from `width[]` (the style INPUT).
-    pub computed_width: [f32; POOL_ELEMENT_COUNT],
-    /// OUTPUT. Layout result height. Kept apart from `height[]` (the style INPUT).
-    pub computed_height: [f32; POOL_ELEMENT_COUNT],
+    /// Background colour packed by the parser (C: `uint32_t background_color[]`). Layout never reads it.
+    pub background_color: [u32; POOL_ELEMENT_COUNT],
 }
 
 
@@ -169,11 +164,38 @@ pub extern "C" fn feav_layout_pool_size() -> usize {
     size_of::<DOBJPool>()
 }
 
-/// Debug: walk every pool in the linked list (from any pool) and print each
-/// occupied node. Compare the output with what C sees for the same nodes.
+/// One element's layout RESULT, read by the renderer. C: `ComputedElement` (8 floats = 32 bytes, aligned to 8).
+///
+/// The results of ALL elements live in one flat array, indexed by the element's GLOBAL id
+/// (pool_index * 1024 + item_index). Layout writes `x`, `y`, `width`, `height` (window pixels,
+/// top-left origin). The four colour channels belong to the parser (C `uf_32` values); layout
+/// never touches them.
+// `align(8)` = every value starts at a multiple of 8 bytes in memory. The 8 floats already fill
+// exactly 32 bytes, so nothing is added: the size stays 32, the same as the renderer's QuadInstance.
+// `Default` gives an all-zero value.
+#[repr(C, align(8))]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct ComputedElement {
+    pub x: f32,
+    pub y: f32,
+    pub width: f32,
+    pub height: f32,
+    /// r, g, b, a as raw 32-bit values (C: `uf_32 r, g, b, a`). Owned by the parser.
+    pub color_channels: [u32; 4],
+}
+
+/// C side: `size_t feav_layout_computed_element_size(void);` (assert it equals `sizeof(ComputedElement)`).
 #[no_mangle]
-pub unsafe extern "C" fn feav_layout_dump(pool: *const DOBJPool) {
-    if pool.is_null() {
+pub extern "C" fn feav_layout_computed_element_size() -> usize {
+    size_of::<ComputedElement>()
+}
+
+/// Debug: walk every pool in the linked list (from any pool) and print each occupied node:
+/// its style (from the pool) and its layout (from the results array).
+/// C side: `void feav_layout_dump(const DOBJPool *pPool, const ComputedElement *pResults);`
+#[no_mangle]
+pub unsafe extern "C" fn feav_layout_dump(pool: *const DOBJPool, results: *const ComputedElement) {
+    if pool.is_null() || results.is_null() {
         return;
     }
     let mut p = pool;
@@ -193,6 +215,7 @@ pub unsafe extern "C" fn feav_layout_dump(pool: *const DOBJPool) {
                 global_id((*pp).pool_index, pr.idx_parent[i] as usize) as i64
             };
             let f = pr.prty_flags[i];
+            let result = &*results.add(global_id(pr.pool_index, i) as usize);
             println!(
                 "node {} parent {} tag {} children {} | style w {:?} {} h {:?} {} | layout x {} y {} w {} h {}",
                 global_id(pr.pool_index, i),
@@ -203,12 +226,12 @@ pub unsafe extern "C" fn feav_layout_dump(pool: *const DOBJPool) {
                 pr.width[i],
                 Unit::from_flags(f, UNIT_OFFSET_HEIGHT),
                 pr.height[i],
-                pr.x[i],
-                pr.y[i],
-                pr.computed_width[i],
-                pr.computed_height[i],
+                result.x,
+                result.y,
+                result.width,
+                result.height,
             );
         }
         p = pr.p_next;
     }
-}
+}

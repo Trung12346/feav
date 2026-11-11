@@ -852,8 +852,8 @@ typedef struct DOBJPool {
     DOBJpropertyUnitFlag prty_flags[POOL_ELEMENT_COUNT];
 
     CSSattributePosition position[POOL_ELEMENT_COUNT];
-    float x[POOL_ELEMENT_COUNT];
-    float y[POOL_ELEMENT_COUNT];
+    // float x[POOL_ELEMENT_COUNT];
+    // float y[POOL_ELEMENT_COUNT];
     float width[POOL_ELEMENT_COUNT];
     float height[POOL_ELEMENT_COUNT];
 
@@ -862,9 +862,22 @@ typedef struct DOBJPool {
     LayoutBoxProperties margin[POOL_ELEMENT_COUNT];
     LayoutBoxProperties border[POOL_ELEMENT_COUNT];
 
-    float computed_width[POOL_ELEMENT_COUNT];
-    float computed_height[POOL_ELEMENT_COUNT];
+    // float computed_width[POOL_ELEMENT_COUNT];
+    // float computed_height[POOL_ELEMENT_COUNT];
+    uint32_t background_color[POOL_ELEMENT_COUNT];
 } DOBJPool;
+
+typedef struct
+{
+    float x;
+    float y;
+    float width;
+    float height;
+    uf_32 r;
+    uf_32 g;
+    uf_32 b;
+    uf_32 a;
+} __attribute__((aligned(16))) ComputedElement;
 
 static inline HeapHandler16 dobj_get_h_attrs(DOBJHandler h)
 {
@@ -883,6 +896,12 @@ static inline DOBJHandler dobj_get_h_parent(DOBJHandler h)
     DOBJPool *p = h.pool;
     poid i = h.item_index;
     return (DOBJHandler){.pool = p->DOBJHandler_pool_parent[i], .item_index = p->DOBJHandler_item_index_parent[i]};
+}
+static inline uint64_t dobj_get_glbid(DOBJHandler h)
+{
+    DOBJPool *p = h.pool;
+    poid i = h.item_index;
+    return i + p->pool_index * POOL_ELEMENT_COUNT;
 }
 static inline uint64_t dobj_get_glbid_parent(DOBJHandler h)
 {

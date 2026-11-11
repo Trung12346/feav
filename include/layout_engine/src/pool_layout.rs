@@ -11,11 +11,15 @@
 //  * "cache"             = remembered answers, so Taffy does not recompute the same
 //                          question twice within one layout run.
 //
-// INPUT arrays (read only):   width, height, margin, padding, inset, position, display, prty_flags
-// OUTPUT arrays (written):    x, y, computed_width, computed_height
-// Inputs and outputs never share an array, so layout can run again and again
-// (window resize, style change) and always starts from the same inputs.
+// INPUT (read only):  the pool's style arrays (width, height, margin, padding, border, inset,
+//                     position, prty_flags, tag_names) and, for the window size, the root's
+//                     `results[root].width` / `.height`.
+// OUTPUT (written):   `results[global id]` = { x, y, width, height } of every node under the root.
+//                     The colour channels in the same struct belong to the parser and are never touched.
+// The style arrays are never modified, so layout can run again and again (window resize,
+// style change) and always starts from the same inputs.
 
+use core::mem::align_of;
 use std::collections::HashMap;
 
 use taffy::{
@@ -29,7 +33,7 @@ use crate::display::{layout_mode_of_node, LayoutMode};
 use crate::pool_style::{LayoutViewport, PoolNodeStyleView};
 use crate::pool_tree::{PoolChildIterator, PoolTree};
 use crate::text_measure::measure_leaf_text;
-use crate::DOBJPool;
+use crate::{ComputedElement, DOBJPool};
 
 // -------------------------------------------------------------------------------------
 // THE TREE THAT CAN BE LAID OUT
@@ -39,6 +43,11 @@ use crate::DOBJPool;
 /// caches, and the ability to write results back into the pool.
 pub struct PoolLayoutTree {
     pool_tree: PoolTree,
+    /// The flat results array, indexed by global id (C: `AppCaches.results`).
+    p_results: *mut ComputedElement,
+    /// How many `ComputedElement`s of that array are committed (usable). Indexing past it would
+    /// touch memory that does not exist, so every access is checked against it.
+    result_capacity: usize,
     viewport: LayoutViewport,
     // `HashMap<K, V>` = a lookup table (a dictionary) from keys of type K to values of type V.
     // Cache per node, found by global id.
@@ -50,9 +59,16 @@ pub struct PoolLayoutTree {
 
 impl PoolLayoutTree {
     /// `p_any_pool` is a `*mut` (writable raw pointer) because layout WRITES into the pool.
-    pub fn new(p_any_pool: *mut DOBJPool, viewport: LayoutViewport) -> PoolLayoutTree {
+    pub fn new(
+        p_any_pool: *mut DOBJPool,
+        p_results: *mut ComputedElement,
+        result_capacity: usize,
+        viewport: LayoutViewport,
+    ) -> PoolLayoutTree {
         PoolLayoutTree {
             pool_tree: PoolTree { p_any_pool: p_any_pool as *const DOBJPool },
+            p_results,
+            result_capacity,
             viewport,
             cache_per_node: HashMap::new(),
             hoisted_children_per_node: HashMap::new(),
@@ -70,6 +86,22 @@ impl PoolLayoutTree {
         // fine because the pool belongs to C and C passed it to us as writable.
         let p_pool = unsafe { self.pool_tree.find_pool(pool_index) } as *mut DOBJPool;
         (p_pool, item_index)
+    }
+
+    /// The result slot of one node: `results[global id]`.
+    // `assert!(condition, "message")` stops the program with the message if the condition is false.
+    // Here that turns "write outside the committed results memory" into a clear error instead of
+    // a silent corruption or a crash somewhere else.
+    fn result_slot(&self, node_id: NodeId) -> *mut ComputedElement {
+        let global: u64 = node_id.into();
+        assert!(
+            (global as usize) < self.result_capacity,
+            "layout: node {} has no result slot (result capacity is {} elements; was a pool added without committing results memory?)",
+            global,
+            self.result_capacity
+        );
+        // `.add(n)` moves a raw pointer forward by n ELEMENTS (here n * 32 bytes).
+        unsafe { self.p_results.add(global as usize) }
     }
 
     /// Which algorithm runs for this node (block, flex, hidden).
@@ -119,16 +151,17 @@ impl LayoutPartialTree for PoolLayoutTree {
         self.style_view(node_id)
     }
 
-    // Taffy says: "node N ended up here with this size". We store it in the OUTPUT arrays.
+    // Taffy says: "node N ended up here with this size". We store it in the results array.
     fn set_unrounded_layout(&mut self, node_id: NodeId, layout: &Layout) {
-        let (p_pool, item_index) = self.locate(node_id);
+        let p_result = self.result_slot(node_id);
         unsafe {
             // x and y hold the RELATIVE position for now; `make_positions_absolute`
-            // converts them after layout.
-            (*p_pool).x[item_index] = layout.location.x;
-            (*p_pool).y[item_index] = layout.location.y;
-            (*p_pool).computed_width[item_index] = layout.size.width;
-            (*p_pool).computed_height[item_index] = layout.size.height;
+            // converts them after layout. Only these four fields are written: the colour
+            // channels next to them belong to the parser.
+            (*p_result).x = layout.location.x;
+            (*p_result).y = layout.location.y;
+            (*p_result).width = layout.size.width;
+            (*p_result).height = layout.size.height;
         }
     }
 
@@ -271,7 +304,7 @@ unsafe fn make_positions_absolute(
     parent_absolute_x: f32,
     parent_absolute_y: f32,
 ) {
-    let (p_pool, item_index) = layout_tree.locate(node_id);
+    let p_result = layout_tree.result_slot(node_id);
     let node_key: u64 = node_id.into();
 
     // Where this node's offset starts from.
@@ -280,16 +313,16 @@ unsafe fn make_positions_absolute(
     let (origin_x, origin_y) = if let Some(containing_block_key) = containing_block_of.get(&node_key) {
         // The containing block is an ANCESTOR, so it was already converted: its x/y in the
         // pool are absolute now.
-        let (p_block_pool, block_item_index) = layout_tree.locate(NodeId::from(*containing_block_key));
-        ((*p_block_pool).x[block_item_index], (*p_block_pool).y[block_item_index])
+        let p_block_result = layout_tree.result_slot(NodeId::from(*containing_block_key));
+        ((*p_block_result).x, (*p_block_result).y)
     } else {
         (parent_absolute_x, parent_absolute_y)
     };
 
-    let absolute_x = origin_x + (*p_pool).x[item_index];
-    let absolute_y = origin_y + (*p_pool).y[item_index];
-    (*p_pool).x[item_index] = absolute_x;
-    (*p_pool).y[item_index] = absolute_y;
+    let absolute_x = origin_x + (*p_result).x;
+    let absolute_y = origin_y + (*p_result).y;
+    (*p_result).x = absolute_x;
+    (*p_result).y = absolute_y;
     for child_id in layout_tree.child_ids(node_id) {
         make_positions_absolute(layout_tree, containing_block_of, child_id, absolute_x, absolute_y);
     }
@@ -299,28 +332,50 @@ unsafe fn make_positions_absolute(
 // THE DOOR C WALKS THROUGH
 // -------------------------------------------------------------------------------------
 
-/// C side: `void feav_layout_compute(DOBJPool *pPool, uint64_t rootGlobalId);`
+/// C side:
+/// `void feav_layout_compute(DOBJPool *pPool, ComputedElement *pResults, uint64_t resultCapacity, uint64_t rootGlobalId);`
 ///
-/// The viewport (window) size is read from the root node's own `width[]` and `height[]`
-/// values in the pool, where the parser stores it. The root is laid out at exactly that
-/// size. Every node under the root gets `x`, `y` (absolute) and `computed_width`,
-/// `computed_height` written. Style arrays are never modified, so this can be called again
-/// after a resize or a style change.
+/// * `pResults`       = the flat results array (C: `app->caches.results`), indexed by global id.
+/// * `resultCapacity` = how many elements of it are committed:
+///                      `app->caches.result_committed_size / sizeof(ComputedElement)`.
+///
+/// The viewport (window) size is read from the ROOT's result slot: `pResults[rootGlobalId].width`
+/// and `.height`, where the parser stores it. The root is laid out at exactly that size. Every
+/// node under the root gets `x`, `y` (window coordinates), `width`, `height` written into its
+/// slot; the colour channels are left alone. Style arrays are never modified, so this can be
+/// called again after a resize (update the root's width/height first) or a style change.
 #[no_mangle]
-pub unsafe extern "C" fn feav_layout_compute(p_pool: *mut DOBJPool, root_global_id: u64) {
+pub unsafe extern "C" fn feav_layout_compute(
+    p_pool: *mut DOBJPool,
+    p_results: *mut ComputedElement,
+    result_capacity: u64,
+    root_global_id: u64,
+) {
+    compute_layout(p_pool, p_results, result_capacity, root_global_id);
+}
+
+/// The same work as `feav_layout_compute`, as a plain Rust function. (A panic inside an
+/// `extern "C"` function cannot unwind into C: Rust aborts the process instead. Keeping the
+/// real work in a plain function lets the tests check the failure cases.)
+pub unsafe fn compute_layout(
+    p_pool: *mut DOBJPool,
+    p_results: *mut ComputedElement,
+    result_capacity: u64,
+    root_global_id: u64,
+) {
+    assert!(!p_pool.is_null(), "layout: the pool pointer is NULL");
+    assert!(!p_results.is_null(), "layout: the results array is NULL (was it reserved and committed before parsing?)");
+    // The struct needs its alignment; a misaligned array would make every access undefined.
+    assert!(p_results as usize % align_of::<ComputedElement>() == 0, "layout: the results array is not aligned for ComputedElement");
+    assert!(root_global_id < result_capacity, "layout: the root has no result slot");
+
     let root_node_id = NodeId::from(root_global_id);
 
-    // Read the window size stored in the root node.
-    let lookup = PoolTree { p_any_pool: p_pool as *const DOBJPool };
-    let (root_pool_index, root_item_index) = PoolTree::split_node_id(root_node_id);
-    let p_root_pool = lookup.find_pool(root_pool_index);
-    let viewport = LayoutViewport {
-        width: (*p_root_pool).width[root_item_index],
-        height: (*p_root_pool).height[root_item_index],
-        root_global_id,
-    };
+    // The window size the parser stored in the root's result slot.
+    let root_result = &*p_results.add(root_global_id as usize);
+    let viewport = LayoutViewport { width: root_result.width, height: root_result.height, root_global_id };
 
-    let mut layout_tree = PoolLayoutTree::new(p_pool, viewport);
+    let mut layout_tree = PoolLayoutTree::new(p_pool, p_results, result_capacity as usize, viewport);
     // `AvailableSpace::Definite(n)` = "exactly n pixels of room" (other choices: min/max-content).
     let available_space =
         Size { width: AvailableSpace::Definite(viewport.width), height: AvailableSpace::Definite(viewport.height) };

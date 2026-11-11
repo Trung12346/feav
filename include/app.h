@@ -10,30 +10,16 @@
 #include "cache.h"
 #include <time.h>
 #include <stdio.h>
+#include "layout_engine/specs.h"
+#include "interpreter/preprocessor.h"
+#include "interpreter/tokenizer.h"
+#include "interpreter/parser.h"
+#include "app_specs.h"
 
 #define VIEW_PORT_WIDTH 1000
 #define VIEW_PORT_HEIGHT 760
 
-typedef struct
-{
-    GLFWwindow *window;
-    VkProcess vk_process;
-    int gpu_select_flag;
-    DOBJPool *pool;
-    Heap *heap;
-    BackgroundProcessHFLOqueue hflo_queue;
 
-    AppCaches caches;
-} App;
-App app_no_args_construct()
-{
-    return (App)
-    {
-        .gpu_select_flag = -1,
-        .vk_process = vk_process_no_args_construct(),
-        .caches = {0}
-    };
-}
 static void frame_buffer_size_callback(GLFWwindow *window, int width, int height)
 {
     App *app = glfwGetWindowUserPointer(window);
@@ -62,6 +48,7 @@ static void vulkan_init(App *app)
     graphics_pipeline_create(&app->vk_process);
     command_pool_create(&app->vk_process);
     vertex_buffer_create(&app->vk_process);
+    instance_buffer_create(&app->vk_process);
     index_buffer_create(&app->vk_process);
     command_buffer_create(&app->vk_process);
     sync_object_create(&app->vk_process);
@@ -72,14 +59,14 @@ static void dobj_init(App *app)
     CreateThread(NULL, 0, &heap_free_list_organizer, &app->hflo_queue, 0, NULL);
 
     heap_init((void **)&app->heap, NULL, HEAP_CLASS_HEAP);
-    pool_init(&app->pool, NULL);
+    pool_init(&app->pool, NULL, &app->caches);
 }
 static void main_loop(App *app)
 {
     for(;!glfwWindowShouldClose(app->window);)
     {
         glfwPollEvents();
-        frame_draw(&app->vk_process, app->window);
+        frame_draw(&app->vk_process, app->window, &app->caches);
     }
     vkDeviceWaitIdle(*app->vk_process.logical_device);
 }
@@ -87,13 +74,26 @@ static void vulkan_destroy(VkProcess *process)
 {
     VkDevice *device = process->logical_device;
     vkDestroyBuffer(*device, *process->vertex_buffer, NULL);
+    vkFreeMemory(*device, *process->vertex_buffer_gmem, NULL);
     vkDestroyBuffer(*device, *process->index_buffer, NULL);
+    vkFreeMemory(*device, *process->index_buffer_gmem, NULL);
+    
     vkDestroyCommandPool(*device, *process->command_pool, NULL);
-    vkDestroySemaphore(*device, *process->present_complete_semaphore, NULL);
-    vkDestroySemaphore(*device, *process->render_finished_semaphore, NULL);
-    vkDestroyImage(*device, *process->images, NULL);
-    vkDestroyImageView(*device, *process->image_views, NULL);
+
+    for (uint8_t i = 0; i < process->image_view_count; i++)
+    {
+        vkDestroyImageView(*device, process->image_views[i], NULL);
+    }
+    for (uint8_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
+    {
+        vkDestroySemaphore(*device, process->present_complete_semaphore[i], NULL);
+        vkDestroySemaphore(*device, process->render_finished_semaphore[i], NULL);
+        vkDestroyBuffer(*device, process->instance_buffer[i], NULL);
+        vkFreeMemory(*device, process->instance_buffer_gmem[i], NULL);
+        vkDestroyFence(*device, process->fence[i], NULL);
+    }
     vkDestroySwapchainKHR(*device, *process->swapchain, NULL);
+    vkDestroyShaderModule(*device, *process->shader_module, NULL);
     vkDestroyPipelineLayout(*device, *process->pipeline_layout, NULL);
     vkDestroyPipeline(*device, *process->graphics_pipeline, NULL);
     vkDestroyDevice(*device, NULL);
@@ -139,6 +139,23 @@ void run(App *app)
     resource_init(&app->caches);
     window_init(app);
     dobj_init(app);
+
+    BHeap *dom_asset;
+
+    char *preproced;
+    uint64_t size;
+    preprocess(app->args.preproc_argc, app->args.preproc_argv, &preproced, &size);
+
+    char *dst;
+    uint64_t dst_size;
+    uint8_t *dict;
+    uint64_t dict_size;
+    tokenize(app->args.tok_argc, app->args.tok_argv, preproced, size, &dst, &dst_size, &dict, &dict_size);
+
+    parse(dst, dict, dict_size, app, &dom_asset);
+
+    feav_layout_compute(app->pool, app->caches.results, app->caches.element_count, 0);
+    feav_layout_dump(app->pool, app->caches.results);
     vulkan_init(app);
     main_loop(app);
     clean_up(app);

@@ -21,11 +21,11 @@
 #define ARG_VAL char*value=argv[i+1];if(strncmp(value,"--", 2) == 0){printf(ERR SYS_DBG_PREFIX" Invalid argument for %s",argv[i]);exit(1);}
 #endif
 
-uint8_t preproc_argc = 0;
-char *preproc_argv[2];
+// uint8_t preproc_argc = 0;
+// char *preproc_argv[2];
 
-uint8_t tok_argc = 0;
-char *tok_argv[2];
+// uint8_t tok_argc = 0;
+// char *tok_argv[2];
 
 void print_array(const uint8_t *array, size_t count)
 {
@@ -39,29 +39,29 @@ void print_array(const uint8_t *array, size_t count)
 
 
 
-void print_dobj(DOBJHandler strt, size_t cnt)
-{
-    for (size_t i = 0; i < cnt; i++)
-    {
-        DOBJPool *p = strt.pool;
-        poid id = strt.item_index;
-        printf("OBJ #%llu:\n{\n", i);
-        printf(TAB "x: %.f, y: %.f\n", p->x[id], p->y[id]);
-        printf(TAB "width: %.f, height: %.f\n", p->width[id], p->height[id]);
-        printf("}\n");
-        dobj_pool_advance(&strt);
-    }
-}
+// void print_dobj(DOBJHandler strt, size_t cnt)
+// {
+//     for (size_t i = 0; i < cnt; i++)
+//     {
+//         DOBJPool *p = strt.pool;
+//         poid id = strt.item_index;
+//         printf("OBJ #%llu:\n{\n", i);
+//         printf(TAB "x: %.f, y: %.f\n", p->x[id], p->y[id]);
+//         printf(TAB "width: %.f, height: %.f\n", p->width[id], p->height[id]);
+//         printf("}\n");
+//         dobj_pool_advance(&strt);
+//     }
+// }
 
-static void dobj_printn(DOBJHandler start, uint64_t n) {
-    for (uint64_t i = 0U; i < n; i++)
-    {
-        DOBJPool *pool = start.pool;
-        uint16_t id = start.item_index;
-        printf("%-8s x=%-4.0f y=%-4.0f width=%-4.0f height=%-4.0f\n", pool->tag_names[id], pool->x[id], pool->y[id], pool->width[id], pool->height[id]);
-        dobj_pool_advance(&start);
-    }
-}
+// static void dobj_printn(DOBJHandler start, uint64_t n) {
+//     for (uint64_t i = 0U; i < n; i++)
+//     {
+//         DOBJPool *pool = start.pool;
+//         uint16_t id = start.item_index;
+//         printf("%-8s x=%-4.0f y=%-4.0f width=%-4.0f height=%-4.0f\n", pool->tag_names[id], pool->x[id], pool->y[id], pool->width[id], pool->height[id]);
+//         dobj_pool_advance(&start);
+//     }
+// }
 
 int main(int argc, char **argv)
 {
@@ -91,19 +91,19 @@ int main(int argc, char **argv)
             } else if (strcmp(argv[i], "--preproc-out") == 0 && i + 1 < argc)
             {
                 ARG_VAL
-                preproc_argc += 2;
-                preproc_argv[preproc_argc - 2] = "--out";
-                preproc_argv[preproc_argc - 1] = value;
+                app.args.preproc_argc += 2;
+                app.args.preproc_argv[app.args.preproc_argc - 2] = "--out";
+                app.args.preproc_argv[app.args.preproc_argc - 1] = value;
 
-                printf("%s %s\n", preproc_argv[preproc_argc - 2], preproc_argv[preproc_argc - 1]);
+                printf("%s %s\n", app.args.preproc_argv[app.args.preproc_argc - 2], app.args.preproc_argv[app.args.preproc_argc - 1]);
             } else if (strcmp(argv[i], "--tok-out") == 0 && i + 1 < argc)
             {
                 ARG_VAL
-                tok_argc += 2;
-                tok_argv[tok_argc - 2] = "--out";
-                tok_argv[tok_argc - 1] = value;
+                app.args.tok_argc += 2;
+                app.args.tok_argv[app.args.tok_argc - 2] = "--out";
+                app.args.tok_argv[app.args.tok_argc - 1] = value;
 
-                printf("%s %s\n", tok_argv[tok_argc - 2], tok_argv[tok_argc - 1]);
+                printf("%s %s\n", app.args.tok_argv[app.args.tok_argc - 2], app.args.tok_argv[app.args.tok_argc - 1]);
             }
 
             //special operation
@@ -119,38 +119,9 @@ int main(int argc, char **argv)
     
     if (!is_special_op)
     {
-        // run(&app);
-        double t0;
-        double t1;
-        double t2;
-        double t3;
-    
-        window_init(&app);
-        resource_init(&app.caches);
-        dobj_init(&app);
+        run(&app);
+        
 
-
-        BHeap *dom_asset;
-
-        t0 = now_ms();
-
-        char *preproced;
-        uint64_t size;
-        preprocess(preproc_argc, preproc_argv, &preproced, &size);
-        printf("src size from preprocessing  %llu\n", size);
-
-        t1 = now_ms();
-
-        char *dst;
-        uint64_t dst_size;
-        uint8_t *dict;
-        uint64_t dict_size;
-        tokenize(tok_argc, tok_argv, preproced, size, &dst, &dst_size, &dict, &dict_size);
-
-        t2 = now_ms();
-        parse(dst, dict, dict_size, &app, &dom_asset);
-
-        t3 = now_ms();
 
         //fb_compute((DOBJHandler){.pool = app.pool, .item_index = 0});
 
@@ -209,9 +180,6 @@ int main(int argc, char **argv)
 
 
 
-        printf("preprocessing %.3f\n", t1 - t0);
-        printf("tokenizing %.3f\n", t2 - t1);
-        printf("parsing %.3f\n", t3 - t2);
         //print_dobj((DOBJHandler){.pool = app.pool, .item_index = 0}, 7);
         // feav_layout_dump(app.pool);
 
@@ -221,8 +189,7 @@ int main(int argc, char **argv)
         // printf("taffy sees %llu descendants of node 0\n", (unsigned long long)descendantCount);
 
         // feav_layout_print_node_sizes(app.pool, 0);
-        feav_layout_compute(app.pool, 0);
-        feav_layout_dump(app.pool);
+        
 
     }
     terminate(&app.hflo_queue.worker);

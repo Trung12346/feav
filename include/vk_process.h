@@ -11,6 +11,7 @@
 #include "debugger.h"
 #include "main.h"
 #include "CGLM/types.h"
+#include "cache.h"
 
 #define MAX_FRAMES_IN_FLIGHT 2
 #define VALIDATION_LAYER_COUNT 1
@@ -21,6 +22,9 @@ const bool validation_layers_enabled = false;
 #else
 const bool validation_layers_enabled = true;
 #endif
+#ifndef MAX_QUAD_COUNT_BUFFER
+    #define MAX_QUAD_COUNT_BUFFER 1024
+#endif
 
 typedef struct
 {
@@ -30,6 +34,7 @@ typedef struct
     VkDevice *logical_device;
     VkQueue *graphics_queue;
     uint32_t graphics_queue_index;
+    VkShaderModule *shader_module;
     VkSurfaceKHR *surface;
     VkSwapchainKHR *swapchain;
     VkExtent2D *extent_2d;
@@ -52,6 +57,9 @@ typedef struct
     VkDeviceMemory *vertex_buffer_gmem;
     VkBuffer *index_buffer;
     VkDeviceMemory *index_buffer_gmem;
+    VkBuffer *instance_buffer;
+    VkDeviceMemory *instance_buffer_gmem;
+    void **p_instance_buffer_map;
     
 } VkProcess;
 
@@ -62,10 +70,19 @@ typedef struct {
 
 typedef struct {
     vec2 pos;
-    vec4 color;
 } Vertex;
 
-typedef VkVertexInputAttributeDescription VertexAttributes[2];
+typedef struct {
+    vec4 rect;
+    vec4 color;
+} QuadInstance;
+
+typedef struct {
+    vec2 viewport;
+} PushConstants;
+
+typedef VkVertexInputAttributeDescription VertexAttributes[3];
+typedef VkVertexInputBindingDescription VertexInputs[2];
 
 VkProcess vk_process_no_args_construct(void)
 {
@@ -97,14 +114,16 @@ VkProcess vk_process_no_args_construct(void)
 
 
 const Vertex vertices[] = {
-    {{0.0f, 0.0f}, {1.0f, 0.0f, 0.0f, 1.0f}},
-    {{1.0f, 0.0f}, {0.0f, 1.0f, 0.0f, 1.0f}},
-    {{1.0f, 1.0f}, {0.0f, 0.0f, 1.0f, 1.0f}},
-    {{0.0f, 1.0f}, {1.0f, 1.0f, 1.0f, 1.0f}}
+    {0.0f, 0.0f},
+    {1.0f, 0.0f},
+    {1.0f, 1.0f},
+    {0.0f, 1.0f}
 };
+const size_t vertex_count = 4;
 const uint8_t indices[] = {
     0, 1, 2, 2, 3, 0
 };
+const size_t index_count = 6;
 
 uint32_t mem_typeof(VkPhysicalDevice *device, uint32_t type_filter, VkMemoryPropertyFlags properties)
 {
@@ -180,13 +199,19 @@ void buffer_cpy(VkQueue *queue, VkDevice *device, VkCommandPool *pool, VkBuffer 
     vkQueueWaitIdle(*queue);
 }
 
-VkVertexInputBindingDescription bind_descript(void)
+void bind_descript(VertexInputs vert_inp)
 {
-    return (VkVertexInputBindingDescription)
+    vert_inp[0] = (VkVertexInputBindingDescription)
     {
         .binding = 0,
         .stride = sizeof(Vertex),
         .inputRate = VK_VERTEX_INPUT_RATE_VERTEX
+    };
+    vert_inp[1] = (VkVertexInputBindingDescription)
+    {
+        .binding = 1,
+        .stride = sizeof(QuadInstance),
+        .inputRate = VK_VERTEX_INPUT_RATE_INSTANCE
     };
 }
 void attr_descript(VertexAttributes vert_attrs)
@@ -201,9 +226,16 @@ void attr_descript(VertexAttributes vert_attrs)
     vert_attrs[1] = (VkVertexInputAttributeDescription)
     {
         .location = 1,
-        .binding = 0,
+        .binding = 1,
         .format = VK_FORMAT_R32G32B32A32_SFLOAT,
-        .offset = offsetof(Vertex, color)
+        .offset = offsetof(QuadInstance, rect)
+    };
+    vert_attrs[2] = (VkVertexInputAttributeDescription)
+    {
+        .location = 2,
+        .binding = 1,
+        .format = VK_FORMAT_R32G32B32A32_SFLOAT,
+        .offset = offsetof(QuadInstance, color)
     };
 }
 
@@ -910,20 +942,20 @@ void graphics_pipeline_create(VkProcess *process)
         .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO
     };
 
-    VkShaderModule shader_module;
-    vkCreateShaderModule(*process->logical_device, &shader_create_info, NULL, &shader_module);
+    process->shader_module = malloc(sizeof(VkShaderModule));
+    vkCreateShaderModule(*process->logical_device, &shader_create_info, NULL, process->shader_module);
     
     VkPipelineShaderStageCreateInfo vertex_shader_create_info = (VkPipelineShaderStageCreateInfo)
     {
         .stage = VK_SHADER_STAGE_VERTEX_BIT,
-        .module = shader_module,
+        .module = *process->shader_module,
         .pName = "vertMain",
         .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO
     };
     VkPipelineShaderStageCreateInfo fragment_shader_create_info = (VkPipelineShaderStageCreateInfo)
     {
         .stage = VK_SHADER_STAGE_FRAGMENT_BIT,
-        .module = shader_module,
+        .module = *process->shader_module,
         .pName = "fragMain",
         .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO
     };
@@ -933,7 +965,11 @@ void graphics_pipeline_create(VkProcess *process)
 
     
 
-    VkVertexInputBindingDescription binding_description = bind_descript();
+    VertexInputs binding_description;
+    bind_descript(binding_description);
+    uint32_t inp_size;
+    ARR_SIZE(&inp_size, UINT32_MAX, binding_description);
+
     VertexAttributes vertex_attributes;
     attr_descript(vertex_attributes);
     uint32_t attr_size;
@@ -941,8 +977,8 @@ void graphics_pipeline_create(VkProcess *process)
 
     VkPipelineVertexInputStateCreateInfo vertex_create_info = (VkPipelineVertexInputStateCreateInfo)
     {
-        .vertexBindingDescriptionCount = 1U,
-        .pVertexBindingDescriptions = &binding_description,
+        .vertexBindingDescriptionCount = inp_size,
+        .pVertexBindingDescriptions = binding_description,
         .vertexAttributeDescriptionCount = attr_size,
         .pVertexAttributeDescriptions = vertex_attributes,
         .sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO
@@ -982,7 +1018,7 @@ void graphics_pipeline_create(VkProcess *process)
 
     VkPipelineColorBlendAttachmentState color_blend_attachment = (VkPipelineColorBlendAttachmentState)
     {
-        .blendEnable = VK_FALSE,
+        .blendEnable = VK_TRUE,
         .colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT
     };
     VkPipelineColorBlendStateCreateInfo color_blend_create_info = (VkPipelineColorBlendStateCreateInfo)
@@ -1006,10 +1042,17 @@ void graphics_pipeline_create(VkProcess *process)
         .sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO
     };
 
+    VkPushConstantRange pc_range = (VkPushConstantRange)
+    {
+        .offset = 0,
+        .size = sizeof(PushConstants),
+        .stageFlags = VK_SHADER_STAGE_VERTEX_BIT
+    };
     VkPipelineLayoutCreateInfo pipeline_layout_create_info = (VkPipelineLayoutCreateInfo)
     {
         .setLayoutCount = 0,
-        .pushConstantRangeCount = 0,
+        .pushConstantRangeCount = 1,
+        .pPushConstantRanges = &pc_range,
         .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO
     };
     process->pipeline_layout = malloc(sizeof(VkPipelineLayout));
@@ -1155,7 +1198,36 @@ void vertex_buffer_create(VkProcess *process)
     );
 
     buffer_cpy(process->graphics_queue, process->logical_device, process->command_pool, *process->vertex_buffer, staging_b, size);
+
+    vkDestroyBuffer(*process->logical_device, staging_b, NULL);
+    vkFreeMemory(*process->logical_device, staging_gmem, NULL);
+}
+void instance_buffer_create(VkProcess *process)
+{ 
+    process->instance_buffer = malloc(sizeof(VkBuffer) * MAX_FRAMES_IN_FLIGHT);
+    process->instance_buffer_gmem = malloc(sizeof(VkDeviceMemory) * MAX_FRAMES_IN_FLIGHT);
+    process->p_instance_buffer_map = malloc(sizeof(void *) * MAX_FRAMES_IN_FLIGHT);
+    printf(INF VK_DBG_PREFIX" Allocated 0x%p for instance buffer, size: %u byte(s)\n", (void *)process->instance_buffer_gmem, sizeof(process->instance_buffer_gmem));
+
     
+    for (uint8_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
+    {
+        MemInt instance_buffer = (MemInt)
+        {
+            &process->instance_buffer[i],
+            &process->instance_buffer_gmem[i]
+        };
+        gmem_buffer_create
+        (
+            process->physical_device,
+            process->logical_device,
+            sizeof(QuadInstance) * MAX_QUAD_COUNT_BUFFER,
+            VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+            VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+            &instance_buffer
+        );
+        vkMapMemory(*process->logical_device, process->instance_buffer_gmem[i], 0, sizeof(QuadInstance) * MAX_QUAD_COUNT_BUFFER, 0, &process->p_instance_buffer_map[i]);
+    }
 }
 void index_buffer_create(VkProcess *process)
 { 
@@ -1205,8 +1277,10 @@ void index_buffer_create(VkProcess *process)
 
     buffer_cpy(process->graphics_queue, process->logical_device, process->command_pool, *process->index_buffer, staging_b, size);
     
+    vkDestroyBuffer(*process->logical_device, staging_b, NULL);
+    vkFreeMemory(*process->logical_device, staging_gmem, NULL);
 }
-void command_buffer_record(VkProcess *process, uint32_t image_index)
+void command_buffer_record(VkProcess *process, uint32_t image_index, uint32_t quad_count)
 {
     VkCommandBufferBeginInfo buffer_begin_info = (VkCommandBufferBeginInfo)
     {
@@ -1230,7 +1304,7 @@ void command_buffer_record(VkProcess *process, uint32_t image_index)
     {
         .color = (VkClearColorValue)
         {
-            .float32 = {0.0f, 0.0f, 0.0f, 1.0f}
+            .float32 = {1.0f, 1.0f, 1.0f, 1.0f}
         }
     };
     VkRenderingAttachmentInfo attachement_info = (VkRenderingAttachmentInfo)
@@ -1281,18 +1355,17 @@ void command_buffer_record(VkProcess *process, uint32_t image_index)
     vkCmdBeginRendering(process->command_buffers[process->frame_index], &render_info);
     vkCmdBindPipeline(process->command_buffers[process->frame_index], VK_PIPELINE_BIND_POINT_GRAPHICS, *process->graphics_pipeline);
 
-    vkCmdBindVertexBuffers(process->command_buffers[process->frame_index], 0, 1, process->vertex_buffer, &(VkDeviceSize){0});
+    PushConstants pc = (PushConstants){.viewport = {viewport.width, viewport. height}};
+    vkCmdPushConstants(process->command_buffers[process->frame_index], *process->pipeline_layout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(PushConstants), &pc);
+
+    VkBuffer buffers[2] = {*process->vertex_buffer, process->instance_buffer[process->frame_index]};
+    vkCmdBindVertexBuffers(process->command_buffers[process->frame_index], 0, 2, buffers, (VkDeviceSize[2]){0, 0});
     vkCmdBindIndexBuffer(process->command_buffers[process->frame_index], *process->index_buffer, 0, VK_INDEX_TYPE_UINT8);
 
     vkCmdSetViewport(process->command_buffers[process->frame_index], 0, 1, &viewport);
     vkCmdSetScissor(process->command_buffers[process->frame_index], 0, 1, &scissor);
 
-    uint32_t vertex_count;
-    ARR_SIZE(&vertex_count, UINT32_MAX, vertices);
-
-    uint32_t index_count;
-    ARR_SIZE(&index_count, UINT32_MAX, indices);
-    vkCmdDrawIndexed(process->command_buffers[process->frame_index], index_count, 1U, 0U, 0, 0U);
+    vkCmdDrawIndexed(process->command_buffers[process->frame_index], index_count, 1, 0UL, 0, 6UL);
     vkCmdEndRendering(process->command_buffers[process->frame_index]);
     transition_image_layout
     (
@@ -1373,7 +1446,7 @@ static void swapchain_recreate(VkProcess *process, GLFWwindow *window)
     swapchain_create(process, window);
     image_views_create(process);
 }
-void frame_draw(VkProcess *process, GLFWwindow *window)
+void frame_draw(VkProcess *process, GLFWwindow *window, AppCaches *cache)
 {
     if (vkWaitForFences(*process->logical_device, 1U, &process->fence[process->frame_index], VK_TRUE, UINT64_MAX) != VK_SUCCESS)
     {
@@ -1406,7 +1479,8 @@ void frame_draw(VkProcess *process, GLFWwindow *window)
         default:
             printf(WARN VK_DBG_PREFIX" Unexpected result returned from vkAcquireNextImageKHR code %d\n", result);
     }
-    command_buffer_record(process, image_index);
+    memcpy(process->p_instance_buffer_map[process->frame_index], cache->results, cache->element_count * sizeof(QuadInstance));
+    command_buffer_record(process, image_index, cache->element_count);
 
     vkQueueWaitIdle(*process->graphics_queue);
 

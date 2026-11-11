@@ -3,31 +3,19 @@
 
 #include "dom/dom_entity.h"
 #include "main.h"
-#include "app.h"
+#include "app_specs.h"
 #include "interpreter/tokenizer.h"
 #include "debugger.h"
 #include "ryu/ryu_parse.h"
 #include <windows.h>
+#include "cache.h"
 
 #define BUILD_DOM_OP_MODE_MASK 0b11110000
 #define HEAP_CSS_ATTRIBUTE_STRIDE 2
 #define HEAP_CSS_VALUE_STRIDE 4
-#define VALUE_BUFFER_SIZE (1024 * 2)
+#define VALUE_BUFFER_SIZE (1024ULL * 2ULL)
 
 #define DOBJHANDLER_UNWRAP(o) p = o.pool; id = o.item_index;
-
-#define WRESERVE_ALIGNMENT (64 * 1024)
-#define WRESERVE(POINTER, SIZE) POINTER = VirtualAlloc(NULL, SIZE, MEM_RESERVE, PAGE_NOACCESS);
-#define WCOMMIT(POINTER, OFFSET, SIZE) \
-{ \
-    void *buffer; \
-    uint8_t i = 0; \
-    do \
-    { \
-        buffer = VirtualAlloc((char *)POINTER + OFFSET, SIZE, MEM_COMMIT, PAGE_READWRITE); \
-    } while (buffer == NULL && i++ < 5); \
-    if (!buffer) {printf(ERR SYS_DBG_PREFIX" Failure to commit new memory"); exit(1);} \
-}
 
 #define SIBLING_ARRAY_WMEM_GUARD(POINTER, CUR_SIZE, SIZE) \
 { \
@@ -38,8 +26,6 @@
     } \
 }
 
-#define UP_64_48_MASK_POINTER 0x0000FFFFFFFFFFFFULL
-#define UP_64_48_MASK_TAG     0xFFFF000000000000ULL
 
 bool is_separator(char c)
 {
@@ -54,16 +40,6 @@ typedef enum {
     CSS_IN_VALUE,
     CSS_AFTER_VALUE
 } CSS_PARSER_STATE;
-
-typedef union {
-    uint32_t u32;
-    float f32;
-} uf_32;
-
-typedef union {
-    uint64_t u64;
-    void *p48;
-} up_64_48;
 
 HeapHandler16 css_parse(const char *css, size_t size, App *app, DOBJHandler cur_o)
 {
@@ -94,6 +70,7 @@ CSS identifier  float32 value
 
     DOBJPool *pl = cur_o.pool;
     poid i = cur_o.item_index;
+    uint64_t cur_glb_ind = dobj_get_glbid(cur_o);
 
     for (; p < cap; p++)
     {
@@ -170,7 +147,9 @@ CSS identifier  float32 value
                                 break;
                             default:
                                 //handle exception
+                                exit(1);
                         }
+                        srgba_2_vec4(value.u32, &app->caches.results[cur_glb_ind].r);
                     } else if (css_id == cache->CSS_WIDTH)
                     {
                         s2f_n(p_strt, len, pl->width + i);
@@ -260,7 +239,7 @@ typedef struct {
     DOBJHandler h_parent;
 } DOBJcreateInfo;
 
-static inline DOBJHandler dobj_create(DOBJcreateInfo *info)
+static inline DOBJHandler dobj_create(DOBJcreateInfo *info, AppCaches *cache)
 {
     DOBJ new_obj = (DOBJ){};
 
@@ -269,7 +248,7 @@ static inline DOBJHandler dobj_create(DOBJcreateInfo *info)
     new_obj.t_size = info->t_size;
     new_obj.p_parent = info->h_parent;
 
-    DOBJHandler h_obj = dobj_pool_alloc(&new_obj, info->ref_pool);
+    DOBJHandler h_obj = dobj_pool_alloc(&new_obj, info->ref_pool, cache);
     // DOBJPool *p = h_obj.pool;
     // uint64_t id = h_obj.item_index;
 
@@ -331,18 +310,21 @@ void parse(char *src, uint8_t *dict, uint64_t dict_size, App* app, BHeap **h)
     DOBJPool *p;
     poid id;
 
-    up_64_48 *last_child;
+    up_64_48 *last_child; // a WRESERVE_ALIGNMENT byte(s) mapping dobj global index <-> last_childs index, each slot stores it latest child
+                          //least significant 48 bits stores windows virtual address, the last 16 bits is the elements index inside pool
+                          //this is not a portable design, thats why im only doing this for a cache, not the pool, i dk how linux will be
     size_t lc_alloc_size = POOL_ELEMENT_COUNT * 8;
     WRESERVE(last_child, WRESERVE_ALIGNMENT)
     WCOMMIT(last_child, 0, lc_alloc_size)
-    uint64_t parent_offset;
+    uint64_t parent_offset; //temporary holds the indexed elements parent position inside last_child
 
     // uint16_t attr_alloc_size = 128;
     // uint16_t attr_count = 0;
     // CSSattribute *attrs = malloc(attr_alloc_size);
     // float *attr_values = malloc(attr_alloc_size);
 
-    BuildDOBJinfo build_info = (BuildDOBJinfo){};
+    bool has_it_not_ran_question_mark = true; // html must be the first tag to be parsed so using a local variable is more cache-good than
+                                              //performing this "if (p->tag_ids[id] == app->caches.ha->HTML_HTML)"
 
     //construct logical objects on memory
     for (uint64_t i = 0; i < dict_size - 1;)
@@ -410,20 +392,24 @@ void parse(char *src, uint8_t *dict, uint64_t dict_size, App* app, BHeap **h)
                                     .ref_pool = pool,
                                     .h_parent = o
                                 };
-                                o = cur_o = dobj_create(&create_info);
+                                o = cur_o = dobj_create(&create_info, &app->caches);
                                 DOBJHANDLER_UNWRAP(o);
 
-                                
-
-                                if (p->tag_ids[id] == app->caches.ha->HTML_HTML)
+                                if (has_it_not_ran_question_mark)
                                 {
-                                    int w;
-                                    int h;
-                                    glfwGetWindowSize(app->window, &w, &h);
-                                    p->width[id] = (float)w;
-                                    p->height[id] = (float)h;
-                                    p->x[id] = 0.f;
-                                    p->y[id] = 0.f;
+                                    has_it_not_ran_question_mark = false;
+                                    // int w;
+                                    // int h;
+                                    // glfwGetWindowSize(app->window, &w, &h);
+                                    // // p->width[id] = (float)w;
+                                    // // p->height[id] = (float)h;
+                                    // // p->x[id] = 0.f;
+                                    // // p->y[id] = 0.f;
+                                    // ComputedElement *html_r = &app->caches.results[0];
+                                    // html_r->x = 0.0f;
+                                    // html_r->y = 0.0f;
+                                    // html_r->width = (float)w;
+                                    // html_r->height = (float)h;
                                 } else
                                 {
                                     parent_offset = dobj_get_glbid_parent(o);
@@ -433,11 +419,11 @@ void parse(char *src, uint8_t *dict, uint64_t dict_size, App* app, BHeap **h)
                                         DOBJPool *pp = (void *)((*(last_child + parent_offset)).u64 & UP_64_48_MASK_POINTER);
                                         poid pid = (*(last_child + parent_offset)).u64 >> 48;
                                         
-                                        //asign previous sibling to this one
+                                        //assign previous sibling to this one
                                         p->DOBJHandler_pool_prev_sib[id] = pp;
                                         p->DOBJHandler_item_index_prev_sib[id] = pid;
 
-                                        //asign this one to previous sibling 
+                                        //assign this one to previous sibling 
                                         pp->DOBJHandler_pool_next_sib[pid] = p;
                                         pp->DOBJHandler_item_index_next_sib[pid] = id; 
                                     }
@@ -571,6 +557,20 @@ void parse(char *src, uint8_t *dict, uint64_t dict_size, App* app, BHeap **h)
         }
         
     }
+
+    DOBJPool *pp = (void *)((*(last_child + parent_offset)).u64 & UP_64_48_MASK_POINTER);
+    poid pid = (*(last_child + parent_offset)).u64 >> 48;
+    app->caches.element_count = pp->pool_index * POOL_ELEMENT_COUNT + pid + 1;
+
+    int w;
+    int ht;
+    glfwGetWindowSize(app->window, &w, &ht);
+    ComputedElement *html_r = &app->caches.results[0];
+    html_r->x = 0.0f;
+    html_r->y = 0.0f;
+    html_r->width = (float)w;
+    html_r->height = (float)ht;
+
 
     // free(attrs);
     // free(attr_values);

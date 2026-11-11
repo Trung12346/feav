@@ -19,7 +19,13 @@
 #define VIEW_PORT_WIDTH 1000
 #define VIEW_PORT_HEIGHT 760
 
+void window_scroll_callback(GLFWwindow *window, double xoffset, double yoffset)
+{
+    WindowContext *ctx = (WindowContext *)glfwGetWindowUserPointer(window);
 
+    ctx->scroll_x += xoffset / 3;
+    ctx->scroll_y += yoffset / 3;
+}
 static void frame_buffer_size_callback(GLFWwindow *window, int width, int height)
 {
     App *app = glfwGetWindowUserPointer(window);
@@ -34,6 +40,8 @@ static void window_init(App *app)
     app->window = glfwCreateWindow(VIEW_PORT_WIDTH, VIEW_PORT_HEIGHT, "Vulkan", NULL, NULL);
     glfwSetWindowUserPointer(app->window, app);
     glfwSetFramebufferSizeCallback(app->window, &frame_buffer_size_callback);
+    glfwSetWindowUserPointer(app->window, &app->wctx);
+    glfwSetScrollCallback(app->window, &window_scroll_callback);
 }
 static void vulkan_init(App *app)
 {
@@ -66,7 +74,13 @@ static void main_loop(App *app)
     for(;!glfwWindowShouldClose(app->window);)
     {
         glfwPollEvents();
-        frame_draw(&app->vk_process, app->window, &app->caches);
+        frame_draw(&app->vk_process, app->window, &app->caches,
+            (PCpackage)
+            {
+                .x_scroll = app->wctx.scroll_x,
+                .y_scroll = app->wctx.scroll_y
+            }
+        );
     }
     vkDeviceWaitIdle(*app->vk_process.logical_device);
 }

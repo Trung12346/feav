@@ -17,7 +17,13 @@ typedef struct
     uint8_t tok_argc;
     char *tok_argv[2];
 } AppArguments;
-
+typedef struct 
+{
+    float viewport_x;
+    float viewport_y;
+    float scroll_x;
+    float scroll_y;
+} WindowContext;
 typedef struct
 {
     GLFWwindow *window;
@@ -29,6 +35,7 @@ typedef struct
 
     AppCaches caches;
     AppArguments args;
+    WindowContext wctx;
 } App;
 App app_no_args_construct()
 {

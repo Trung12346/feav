@@ -1,4 +1,4 @@
-struct PushConstants { float2 vport_size; };
+struct PushConstants { float2 vport_size; float2 scroll; };
 [[vk::push_constant]] PushConstants pc;
 
 struct VSInput {
@@ -23,7 +23,7 @@ VSOutput vertMain(VSInput input) {
 
     float2 rect_abs_position = rect_position_pixel / pc.vport_size * 2.0 - 1.0;
 
-    output.pos = float4(rect_abs_position, 0.0, 1.0);
+    output.pos = float4(rect_abs_position + pc.scroll, 0.0, 1.0);
     output.color = input.in_color;
     return output;
 }

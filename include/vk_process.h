@@ -79,7 +79,13 @@ typedef struct {
 
 typedef struct {
     vec2 viewport;
+    vec2 scroll;
 } PushConstants;
+
+typedef struct {
+    float x_scroll;
+    float y_scroll;
+} PCpackage;
 
 typedef VkVertexInputAttributeDescription VertexAttributes[3];
 typedef VkVertexInputBindingDescription VertexInputs[2];
@@ -1019,6 +1025,12 @@ void graphics_pipeline_create(VkProcess *process)
     VkPipelineColorBlendAttachmentState color_blend_attachment = (VkPipelineColorBlendAttachmentState)
     {
         .blendEnable = VK_TRUE,
+        .srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA,
+        .dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
+        .colorBlendOp = VK_BLEND_OP_ADD,
+        .srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE,
+        .dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO,
+        .alphaBlendOp = VK_BLEND_OP_ADD,
         .colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT
     };
     VkPipelineColorBlendStateCreateInfo color_blend_create_info = (VkPipelineColorBlendStateCreateInfo)
@@ -1280,7 +1292,7 @@ void index_buffer_create(VkProcess *process)
     vkDestroyBuffer(*process->logical_device, staging_b, NULL);
     vkFreeMemory(*process->logical_device, staging_gmem, NULL);
 }
-void command_buffer_record(VkProcess *process, uint32_t image_index, uint32_t quad_count)
+void command_buffer_record(VkProcess *process, uint32_t image_index, uint32_t quad_count, PCpackage pkg)
 {
     VkCommandBufferBeginInfo buffer_begin_info = (VkCommandBufferBeginInfo)
     {
@@ -1355,7 +1367,7 @@ void command_buffer_record(VkProcess *process, uint32_t image_index, uint32_t qu
     vkCmdBeginRendering(process->command_buffers[process->frame_index], &render_info);
     vkCmdBindPipeline(process->command_buffers[process->frame_index], VK_PIPELINE_BIND_POINT_GRAPHICS, *process->graphics_pipeline);
 
-    PushConstants pc = (PushConstants){.viewport = {viewport.width, viewport. height}};
+    PushConstants pc = (PushConstants){.viewport = {viewport.width, viewport.height}, .scroll = {pkg.x_scroll, pkg.y_scroll}};
     vkCmdPushConstants(process->command_buffers[process->frame_index], *process->pipeline_layout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(PushConstants), &pc);
 
     VkBuffer buffers[2] = {*process->vertex_buffer, process->instance_buffer[process->frame_index]};
@@ -1365,7 +1377,7 @@ void command_buffer_record(VkProcess *process, uint32_t image_index, uint32_t qu
     vkCmdSetViewport(process->command_buffers[process->frame_index], 0, 1, &viewport);
     vkCmdSetScissor(process->command_buffers[process->frame_index], 0, 1, &scissor);
 
-    vkCmdDrawIndexed(process->command_buffers[process->frame_index], index_count, 1, 0UL, 0, 6UL);
+    vkCmdDrawIndexed(process->command_buffers[process->frame_index], index_count, quad_count, 0UL, 0, 0UL);
     vkCmdEndRendering(process->command_buffers[process->frame_index]);
     transition_image_layout
     (
@@ -1446,7 +1458,7 @@ static void swapchain_recreate(VkProcess *process, GLFWwindow *window)
     swapchain_create(process, window);
     image_views_create(process);
 }
-void frame_draw(VkProcess *process, GLFWwindow *window, AppCaches *cache)
+void frame_draw(VkProcess *process, GLFWwindow *window, AppCaches *cache, PCpackage pkg)
 {
     if (vkWaitForFences(*process->logical_device, 1U, &process->fence[process->frame_index], VK_TRUE, UINT64_MAX) != VK_SUCCESS)
     {
@@ -1480,7 +1492,11 @@ void frame_draw(VkProcess *process, GLFWwindow *window, AppCaches *cache)
             printf(WARN VK_DBG_PREFIX" Unexpected result returned from vkAcquireNextImageKHR code %d\n", result);
     }
     memcpy(process->p_instance_buffer_map[process->frame_index], cache->results, cache->element_count * sizeof(QuadInstance));
-    command_buffer_record(process, image_index, cache->element_count);
+    command_buffer_record(process, image_index, cache->element_count, pkg);
+    
+    // QuadInstance q = {.rect = {100, 100, 200, 200}, .color = {1, 0, 0, 1}};
+    // memcpy(process->p_instance_buffer_map[process->frame_index], &q, sizeof(q));
+    // command_buffer_record(process, image_index, 1);
 
     vkQueueWaitIdle(*process->graphics_queue);
 
